@@ -1,0 +1,12 @@
+{
+  "name": "@openclaw/multi-message-mode",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-message mode plugin for OpenClaw",
+  "type": "module",
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ]
+  }
+}

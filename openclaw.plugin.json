@@ -1,0 +1,9 @@
+{
+  "id": "multi-message-mode",
+  "enabledByDefault": false,
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
