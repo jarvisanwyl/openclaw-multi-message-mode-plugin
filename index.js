@@ -80,6 +80,55 @@ const appendToBuffer = async (identifier, message) => {
   } catch (err) {}
 };
 
+// Extract transcript from voice message cleanedBody
+// Format: "[Audio]\nUser text:\n... Transcript:\nMulti-message mode."
+const extractTranscript = (cleanedBody) => {
+  if (!cleanedBody.includes('<media:audio>') || !cleanedBody.includes('Transcript:')) {
+    return null;
+  }
+  const match = cleanedBody.match(/Transcript:\n(.+?)(?:\n---|$)/s);
+  return match ? match[1].trim() : null;
+};
+
+// Normalize text for keyword matching: lowercase, remove non-letter characters
+const normalizeText = (text) => {
+  return text.toLowerCase().replace(/[^a-z]/g, '');
+};
+
+// Check if cleanedBody is an activation request (/mmm or voice "multi-message mode")
+const isActivationRequest = (cleanedBody) => {
+  const trimmed = cleanedBody.trim();
+  if (trimmed === '/mmm') {
+    return true;
+  }
+  const transcript = extractTranscript(cleanedBody);
+  if (!transcript || transcript.length > 30) {
+    return false; // Too long, treat as normal content
+  }
+  const normalized = normalizeText(transcript);
+  return normalized === 'multimessagemode';
+};
+
+// Check if cleanedBody is a deactivation request (/mmc or voice "multi-message complete")
+const isDeactivationRequest = (cleanedBody) => {
+  const trimmed = cleanedBody.trim();
+  if (trimmed === '/mmc') {
+    return true;
+  }
+  const transcript = extractTranscript(cleanedBody);
+  if (!transcript || transcript.length > 30) {
+    return false;
+  }
+  const normalized = normalizeText(transcript);
+  return normalized === 'multimessagecomplete';
+};
+
+// Check if cleanedBody is a cancel request (/mmm-cancel)
+const isCancelRequest = (cleanedBody) => {
+  const trimmed = cleanedBody.trim();
+  return trimmed === '/mmm-cancel';
+};
+
 // Get identifier from sessionKey
 // sessionKey format: "agent:main:telegram:group:-1003690577722:topic:1867"
 // We want: "telegram:-1003690577722:topic:1867" (skip the chat type)
@@ -119,10 +168,11 @@ export default definePluginEntry({
         return undefined;
       }
       
-      const messageText = (event.cleanedBody || '').trim();
+      const cleanedBody = event.cleanedBody || '';
+      const messageText = cleanedBody.trim();
 
-      // /mmm - Activate batch mode
-      if (messageText === '/mmm') {
+      // Activation: /mmm or voice "multi-message mode"
+      if (isActivationRequest(cleanedBody)) {
         api.logger.info(`[multi-message-mode] Activate command for ${identifier}`);
         const active = await isBatchActive(identifier);
         if (active) {
@@ -132,8 +182,8 @@ export default definePluginEntry({
         return { handled: true, reply: { text: 'Multi-message mode activated. Send messages, then /mmc to release.' } };
       }
       
-      // /mmm-cancel - Cancel batch mode
-      if (messageText === '/mmm-cancel') {
+      // Cancel: /mmm-cancel only (no voice equivalent)
+      if (isCancelRequest(cleanedBody)) {
         api.logger.info(`[multi-message-mode] Cancel command for ${identifier}`);
         const active = await isBatchActive(identifier);
         if (!active) {
@@ -143,9 +193,9 @@ export default definePluginEntry({
         return { handled: true, reply: { text: 'Multi-message mode cancelled.' } };
       }
       
-      // /mmc - Let through to before_prompt_build
-      // before_prompt_build will inject the buffer content
-      if (messageText === '/mmc') {
+      // Deactivation: /mmc or voice "multi-message complete"
+      // Let through to before_prompt_build
+      if (isDeactivationRequest(cleanedBody)) {
         const active = await isBatchActive(identifier);
         if (active) {
           api.logger.info(`[multi-message-mode] /mmc received, deactivating for ${identifier}`);
@@ -162,13 +212,14 @@ export default definePluginEntry({
       
       // Batch is active - buffer transcript and cancel agent turn
       if (messageText) {
-        let transcript = messageText;
-        const transcriptMatch = messageText.match(/Transcript:\n(.+?)(?:\n---|$)/s);
-        if (transcriptMatch) {
-          transcript = transcriptMatch[1].trim();
+        let content = messageText;
+        // If it's a voice message, extract just the transcript
+        const transcript = extractTranscript(cleanedBody);
+        if (transcript !== null) {
+          content = transcript;
         }
-        await appendToBuffer(identifier, transcript);
-        api.logger.info(`[multi-message-mode] Buffered ${transcript.length} chars for ${identifier}`);
+        await appendToBuffer(identifier, content);
+        api.logger.info(`[multi-message-mode] Buffered ${content.length} chars for ${identifier}`);
       }
       
       return { handled: true, reply: { text: 'Message buffered.' } }; // Cancel agent turn and reply.
@@ -184,12 +235,12 @@ export default definePluginEntry({
       api.logger.info(`[multi-message-mode] before_prompt_build ctx keys: ${JSON.stringify(Object.keys(ctx))}`);
       api.logger.info(`[multi-message-mode] before_prompt_build sessionKey: ${ctx.sessionKey}`);
       
-      // Check if prompt contains /mmc
+      // Check if prompt is a deactivation request (/mmc or voice "multi-message complete")
       const promptText = event.prompt || '';
-      const hasMmc = promptText.includes('/mmc');
-      api.logger.info(`[multi-message-mode] before_prompt_build hasMmc: ${hasMmc}`);
+      const isDeactivation = promptText.includes('/mmc') || isDeactivationRequest(promptText);
+      api.logger.info(`[multi-message-mode] before_prompt_build isDeactivation: ${isDeactivation}`);
       
-      if (!hasMmc) {
+      if (!isDeactivation) {
         return undefined;
       }
       
