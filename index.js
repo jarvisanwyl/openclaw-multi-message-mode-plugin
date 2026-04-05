@@ -112,6 +112,7 @@ export default definePluginEntry({
     // Lets /mmc pass through to before_prompt_build
     // ========================================
     api.on('before_agent_reply', async (event, ctx) => {
+      api.logger.info('[multi-message-mode] before_agent_reply fired');
       const identifier = getIdentifier(ctx);
       
       if (!identifier) {
