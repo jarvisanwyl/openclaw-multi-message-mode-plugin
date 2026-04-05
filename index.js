@@ -120,9 +120,7 @@ export default definePluginEntry({
       }
       
       const messageText = (event.cleanedBody || '').trim();
-      
-      api.logger.info(`[multi-message-mode] event.cleanedBody: ${messageText}`);
-      
+
       // /mmm - Activate batch mode
       if (messageText === '/mmm') {
         api.logger.info(`[multi-message-mode] Activate command for ${identifier}`);
