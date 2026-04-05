@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry';
 
-const BATCH_ROOT = '/tmp/openclaw/batch';
+const BATCH_ROOT = '/tmp/openclaw/multi-message-mode/batch';
 
 // Normalize identifier for filesystem use
 const normalizeIdentifier = (identifier) => {
@@ -170,7 +170,7 @@ export default definePluginEntry({
         api.logger.info(`[multi-message-mode] Buffered ${transcript.length} chars for ${identifier}`);
       }
       
-      return { handled: true }; // Cancel agent turn
+      return { handled: true, reply: { text: 'Message buffered.' } }; // Cancel agent turn and reply.
     }, { priority: 100 });
     
     // ========================================
