@@ -207,11 +207,18 @@ export default definePluginEntry({
       try {
         bufferContent = await fs.readFile(join(dir, 'buffer.txt'), 'utf8');
       } catch (err) {}
-      
+
       if (!bufferContent.trim()) {
         return { prependContext: 'The user released a multi-message batch, but no messages were buffered.' };
       }
-      
+
+      // Clean up the batch directory (delete buffer files)
+      try {
+        await cancelBatch(identifier);
+      } catch (err) {
+        api.logger.warn(`[multi-message-mode] Failed to clean up batch for ${identifier}: ${err.message}`);
+      }
+
       // Inject buffer content via prependContext
       api.logger.info(`[multi-message-mode] Injecting ${bufferContent.length} chars via prependContext`);
       return { 
