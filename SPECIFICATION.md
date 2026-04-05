@@ -4,7 +4,7 @@
 
 The **Multi‑Message Mode** plugin buffers multiple incoming messages and releases them as a single concatenated block when deactivated. This enables voice‑note batching, long‑form input, and uninterrupted multi‑message workflows.
 
-The plugin intercepts inbound messages via the OpenClaw `before_dispatch` hook, stores them in a session‑scoped buffer, and blocks them from reaching the agent. When the batch is complete, the buffer is written to disk, and a trigger message is allowed through so the agent can read and process the accumulated content.
+The plugin intercepts inbound messages via the OpenClaw `before_agent_reply` hook, stores them in a session‑scoped buffer, and blocks them from reaching the agent. When the batch is complete, the buffer is injected into the LLM prompt via the `before_prompt_build` hook, allowing the agent to process all accumulated messages as a single request.
 
 ## Activation & Deactivation
 
@@ -14,91 +14,105 @@ The plugin intercepts inbound messages via the OpenClaw `before_dispatch` hook, 
 |---------|---------|--------|
 | `/mmm`  | Multi‑Message Mode | Activate batch mode |
 | `/mmc`  | Multi‑Message Complete | Deactivate batch mode |
+| `/mmm‑cancel` | Cancel batch | Discard buffer and deactivate |
 
-### 2. Keyword triggers (voice / spoken)
+### 2. Voice‑transcript triggers
 
-| Keyword phrase | Meaning | Detection logic |
-|----------------|---------|-----------------|
-| `multi‑message mode`   | Activate batch mode | See “Keyword detection” below |
-| `multi‑message complete` | Deactivate batch mode | See “Keyword detection” below |
+| Spoken phrase | Meaning | Detection logic |
+|---------------|---------|-----------------|
+| `multi‑message mode`   | Activate batch mode | See “Voice detection” below |
+| `multi‑message complete` | Deactivate batch mode | See “Voice detection” below |
 
-### 3. Keyword detection algorithm
+**Note:** Voice cancellation (`multi‑message cancel`) is not implemented; use `/mmm‑cancel`.
 
-For any inbound message:
+### 3. Voice detection algorithm
 
-1. **Length filter**: If the raw message text exceeds 30 characters, skip keyword detection (treat as normal content).
-2. **Normalization**:
-   - Convert the message to lowercase.
+When a voice message arrives, its transcript is embedded in the `cleanedBody` field with the format:
+```
+[Audio]
+User text:
+... Transcript:
+Multi‑message mode.
+```
+
+Detection steps:
+1. **Extract transcript**: Look for `<media:audio>` and `Transcript:` markers; capture the line after `Transcript:`.
+2. **Length filter**: If the extracted transcript exceeds 30 characters, treat as normal content (skip keyword detection).
+3. **Normalization**:
+   - Convert the transcript to lowercase.
    - Remove all non‑letter characters (a‑z).
-   - Remove all whitespace.
-3. **Exact match**:
+4. **Exact match**:
    - If the normalized string equals `multimessagemode` → **activation**.
    - If the normalized string equals `multimessagecomplete` → **deactivation**.
    - Otherwise, treat as normal content.
 
-**Example**:
+**Examples**:
 - `"Multi‑message mode!"` → `multimessagemode` → activate
 - `"Multi‑message complete."` → `multimessagecomplete` → deactivate
-- `"Okay, multi-message mode."` → `okaymultimessagemode` → ignore
+- `"Okay, multi‑message mode."` → transcript length > 30 → ignore (treated as buffered content)
 - `"Let’s start multi‑message mode now"` → length > 30 → ignore
 
 ## Behavior
 
-### Activation (`/mmm` or `multi‑message mode`)
-1. Create a batch‑state directory for the session (`/tmp/openclaw/batch/<normalized‑session‑id>/`).
+### Activation (`/mmm` or voice `multi‑message mode`)
+1. Create a batch‑state directory for the session (`/tmp/openclaw/multi‑message‑mode/batch/<normalized‑session‑id>/`).
 2. Write an `active` flag file.
-3. Clear any existing buffer.
-4. Reply with a short confirmation (e.g., “Multi‑message mode activated.”).
+3. Create empty `buffer.txt` and `meta.json` files.
+4. Reply with a short confirmation (“Multi‑message mode activated. Send messages, then /mmc to release.”).
 5. **All subsequent messages are blocked** (see “Buffering”).
 
 ### Buffering (while active)
 1. Each inbound message (except activation/deactivation commands) is:
-   - Appended to a `buffer.txt` file with a timestamp.
-   - Counted in a `meta.json` file.
-2. The plugin returns `{ handled: true, text: "✓" }` (a silent acknowledgment) to block the message from reaching the agent.
+   - Appended to `buffer.txt` with a server‑side ISO‑8601 timestamp.
+   - Counted and timestamped in `meta.json`.
+2. The plugin returns `{ handled: true, reply: { text: 'Message buffered.' } }` to block the message from reaching the agent and give the user visible feedback.
+3. Voice messages are stripped of their surrounding metadata; only the transcript line is stored.
 
-### Deactivation (`/mmc` or `multi‑message complete`)
-1. Remove the `active` flag file (keep the buffer).
-2. **Let the deactivation message pass through** (`{ handled: false }`).
-3. The agent will receive the deactivation message, run the existing `check_batch.sh` script, and process the buffer as a single user input.
+### Deactivation (`/mmc` or voice `multi‑message complete`)
+1. Remove the `active` flag file (keep the buffer on disk).
+2. **Let the deactivation message pass through** to `before_prompt_build`.
+3. In `before_prompt_build`, read `buffer.txt`, delete the entire batch directory, and inject the buffer content into the LLM prompt via `prependContext`.
+4. The agent receives a single prefixed context block containing all buffered messages in chronological order.
 
-### Cancellation (optional)
-A separate `/mmm‑cancel` command or keyword `multi-message cancel` can delete the batch directory entirely, discarding the buffer.
+### Cancellation (`/mmm‑cancel`)
+1. Delete the entire batch directory, discarding any buffered content.
+2. Reply with “Multi‑message mode cancelled.”
 
 ## State & Persistence
 
-- **Location**: `/tmp/openclaw/batch/<normalized‑session‑id>/`
+- **Location**: `/tmp/openclaw/multi‑message‑mode/batch/<normalized‑session‑id>/`
 - **Files**:
   - `active` – empty flag file (exists → batch is active)
-  - `buffer.txt` – concatenated messages with timestamps and separators
+  - `buffer.txt` – concatenated messages with timestamps and separators (`[<timestamp>] message\n---\n`)
   - `meta.json` – activation time, message count, last‑appended timestamp
-- **Session identification**: Use `channelId:conversationId` (e.g., `telegram:-1003690577722:topic:1867`).
+- **Session identification**: Extracted from `sessionKey` using regex; format `channelId:conversationId` (e.g., `telegram:-1003690577722:topic:1867`).
+- **Clean‑up**: Batch directories are deleted after injection; no persistent state remains.
 
-## Integration with existing agent logic
+## Plugin Hooks
 
-The agent already has a `check_batch.sh` script that reads the buffer when it sees `/batch‑end`. The plugin will:
-
-1. Keep the same file‑system layout so the script works unchanged.
-2. Send `/mmc` (or `multi‑message complete`) as the trigger message.
-3. The agent will run the script, receive `COMPLETE:<buffer‑content>`, and process it as a single user message.
+- **`before_agent_reply`**: Handles activation, cancellation, buffering, and deactivation detection. Blocks agent turns while batch is active.
+- **`before_prompt_build`**: Detects deactivation messages (`/mmc` or voice), reads the buffer, cleans up the directory, and injects the buffer via `prependContext`.
 
 ## Edge Cases & Error Handling
 
 - **Plugin restart**: Batch state survives because it’s stored on disk.
 - **Multiple sessions**: Each chat gets its own isolated buffer.
-- **Concurrent activation**: If already active, `/mmm` should reply “Already active” and keep buffering.
-- **Deactivation without activation**: Ignore (no state to clean).
-- **Very long buffers**: Consider a size limit (e.g., 10 KB) or message‑count limit (e.g., 50).
+- **Concurrent activation**: If already active, `/mmm` replies “Multi‑message mode already active.”
+- **Deactivation without activation**: Ignored (no state to clean).
+- **Buffer read/write failures**: Warnings are logged via `api.logger.warn`; the plugin continues without crashing.
+- **Ordering guarantee**: Messages are buffered in the order they trigger the `before_agent_reply` hook. With queue depth 0 (`collect` mode), this matches send order.
+- **Voice transcription timing**: Each voice note is a separate hook invocation; transcription delays do not reorder messages.
+- **Very long buffers**: No size or message‑count limits are enforced (consider adding in future versions).
 
-## Next Steps
+## Implementation Status
 
-1. Implement the detection logic in `index.js`.
-2. Add file‑system operations (activate, append, deactivate, cancel).
-3. Test with Telegram messages (text and audio transcripts).
-4. Verify the agent’s `check_batch.sh` works with the new trigger messages.
-5. Add error logging and recovery.
+✅ All detection logic implemented (`extractTranscript`, `normalizeText`, `isActivationRequest`, `isDeactivationRequest`, `isCancelRequest`)
+✅ File‑system operations (`activateBatch`, `appendToBuffer`, `deactivateBatch`, `cancelBatch`)
+✅ Voice‑activation working with Telegram audio transcripts
+✅ Ordering preserved, clean‑up after injection
+✅ Error logging for file‑system failures
 
 ---
 
-*Last updated: 2026‑04‑04*  
+*Last updated: 2026‑04‑05*  
 *Plugin ID: `multi‑message‑mode`*
