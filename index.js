@@ -62,23 +62,7 @@ const cancelBatch = async (identifier) => {
   } catch (err) {}
 };
 
-// Append message to buffer
-const appendToBuffer = async (identifier, message) => {
-  const dir = getBatchDir(identifier);
-  const bufferPath = join(dir, 'buffer.txt');
-  const entry = `[${new Date().toISOString()}] ${message}\n---\n`;
-  try {
-    await fs.appendFile(bufferPath, entry);
-    const metaPath = join(dir, 'meta.json');
-    try {
-      const metaContent = await fs.readFile(metaPath, 'utf8');
-      const meta = JSON.parse(metaContent);
-      meta.messageCount = (meta.messageCount || 0) + 1;
-      meta.lastAppendedAt = new Date().toISOString();
-      await fs.writeFile(metaPath, JSON.stringify(meta, null, 2));
-    } catch (err) {}
-  } catch (err) {}
-};
+
 
 // Extract transcript from voice message cleanedBody
 // Format: "[Audio]\nUser text:\n... Transcript:\nMulti-message mode."
@@ -155,13 +139,38 @@ export default definePluginEntry({
   register(api) {
     api.logger.info('[multi-message-mode] Plugin registering');
     
+    // Append message to buffer with error logging
+    const appendToBuffer = async (identifier, message) => {
+      const dir = getBatchDir(identifier);
+      const bufferPath = join(dir, 'buffer.txt');
+      const entry = `[${new Date().toISOString()}] ${message}\n---\n`;
+      try {
+        await fs.appendFile(bufferPath, entry);
+      } catch (err) {
+        api.logger.warn(`[multi-message-mode] Failed to append to buffer for ${identifier}: ${err.message}`);
+        return; // Don't update meta if buffer write failed
+      }
+      
+      // Update metadata
+      const metaPath = join(dir, 'meta.json');
+      try {
+        const metaContent = await fs.readFile(metaPath, 'utf8');
+        const meta = JSON.parse(metaContent);
+        meta.messageCount = (meta.messageCount || 0) + 1;
+        meta.lastAppendedAt = new Date().toISOString();
+        await fs.writeFile(metaPath, JSON.stringify(meta, null, 2));
+      } catch (err) {
+        api.logger.warn(`[multi-message-mode] Failed to update metadata for ${identifier}: ${err.message}`);
+        // Continue; buffer written, meta is secondary
+      }
+    };
+    
     // ========================================
     // before_agent_reply hook
     // Handles: /mmm, /mmm-cancel, buffering, blocking
     // Lets /mmc pass through to before_prompt_build
     // ========================================
     api.on('before_agent_reply', async (event, ctx) => {
-      api.logger.info('[multi-message-mode] before_agent_reply fired');
       const identifier = getIdentifier(ctx);
       
       if (!identifier) {
@@ -219,7 +228,6 @@ export default definePluginEntry({
           content = transcript;
         }
         await appendToBuffer(identifier, content);
-        api.logger.info(`[multi-message-mode] Buffered ${content.length} chars for ${identifier}`);
       }
       
       return { handled: true, reply: { text: 'Message buffered.' } }; // Cancel agent turn and reply.
@@ -230,25 +238,17 @@ export default definePluginEntry({
     // Handles: /mmc - injects buffered content into LLM input
     // ========================================
     api.on('before_prompt_build', async (event, ctx) => {
-      api.logger.info('[multi-message-mode] before_prompt_build fired');
-      api.logger.info(`[multi-message-mode] before_prompt_build event keys: ${JSON.stringify(Object.keys(event))}`);
-      api.logger.info(`[multi-message-mode] before_prompt_build ctx keys: ${JSON.stringify(Object.keys(ctx))}`);
-      api.logger.info(`[multi-message-mode] before_prompt_build sessionKey: ${ctx.sessionKey}`);
-      
       // Check if prompt is a deactivation request (/mmc or voice "multi-message complete")
       const promptText = event.prompt || '';
       const isDeactivation = promptText.includes('/mmc') || isDeactivationRequest(promptText);
-      api.logger.info(`[multi-message-mode] before_prompt_build isDeactivation: ${isDeactivation}`);
       
       if (!isDeactivation) {
         return undefined;
       }
       
       const identifier = getIdentifier(ctx);
-      api.logger.info(`[multi-message-mode] before_prompt_build identifier: ${identifier}`);
       
       if (!identifier) {
-        api.logger.info('[multi-message-mode] before_prompt_build: no identifier');
         return undefined;
       }
       
@@ -276,7 +276,5 @@ export default definePluginEntry({
         prependContext: `The user has collected the following messages via multi-message mode. Process them as a single request:\n---\n${bufferContent}---\n\n`
       };
     }, { priority: 100 });
-    
-    api.logger.info('[multi-message-mode] Plugin registered successfully');
   }
 });
