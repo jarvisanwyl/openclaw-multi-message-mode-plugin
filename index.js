@@ -210,7 +210,7 @@ export default definePluginEntry({
           api.logger.info(`[multi-message-mode] /mmc received, deactivating for ${identifier}`);
           await deactivateBatch(identifier);
         }
-        return { handled: false, reply: { text: 'Multi-message mode deactivated. Processing messages.' } }; // Let through to before_prompt_build
+        return undefined; // Let through to before_prompt_build
       }
       
       // Message buffering (when batch is active)
