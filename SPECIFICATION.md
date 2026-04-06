@@ -25,32 +25,32 @@ The plugin intercepts inbound messages via the OpenClaw `before_agent_reply` hoo
 
 **Note:** Voice cancellation (`multi‑message cancel`) is not implemented; use `/mmm‑cancel`.
 
-### 3. Voice detection algorithm
+### 3. Voice detection algorithm (Current status – broken)
 
-When a voice message arrives, its transcript is embedded in the `cleanedBody` field with the format:
-```
-[Audio]
-User text:
-... Transcript:
-Multi‑message mode.
-```
+**Problem:** Since OpenClaw v2026.4.5, voice‑note transcripts are **no longer embedded in `cleanedBody`**. Instead, the transcript is written to a separate JSON file next to the audio file, and `cleanedBody` remains `<media:audio>` placeholder. As a result, voice‑activation detection in `before_agent_reply` no longer works.
 
-Detection steps:
-1. **Extract transcript**: Look for `<media:audio>` and `Transcript:` markers; capture the line after `Transcript:`.
-2. **Length filter**: If the extracted transcript exceeds 30 characters, treat as normal content (skip keyword detection).
-3. **Normalization**:
-   - Convert the transcript to lowercase.
-   - Remove all non‑letter characters (a‑z).
-4. **Exact match**:
-   - If the normalized string equals `multimessagemode` → **activation**.
-   - If the normalized string equals `multimessagecomplete` → **deactivation**.
-   - Otherwise, treat as normal content.
+**Where the transcript lives:**
+- Audio file: `/home/janwyl/.openclaw/media/inbound/file_<uuid>.ogg`
+- Transcript file: `/home/janwyl/.openclaw/media/inbound/file_<uuid>.json` (contains `{"text": "transcript here"}`)
+- The plugin's `before_agent_reply` hook sees only `<media:audio>` in `cleanedBody`.
+- The plugin's `before_prompt_build` hook sees a media‑attachment line in `event.prompt` (e.g., `[media attached: /home/janwyl/.openclaw/media/inbound/file_…]`).
+- The transcript is **not present** in `event.transcript`, `event.media`, or `event.messages`.
 
-**Examples**:
-- `"Multi‑message mode!"` → `multimessagemode` → activate
-- `"Multi‑message complete."` → `multimessagecomplete` → deactivate
-- `"Okay, multi‑message mode."` → transcript length > 30 → ignore (treated as buffered content)
-- `"Let’s start multi‑message mode now"` → length > 30 → ignore
+**Proposed fix:**
+1. **Voice activation** must be detected in `before_prompt_build` (where the media‑attachment line appears).
+2. Parse the audio‑file path from the attachment line.
+3. Derive the JSON path (replace `.ogg` with `.json`).
+4. Read the transcript from the JSON file.
+5. Normalize and match against `multimessagemode` / `multimessagecomplete`.
+6. If match, activate/deactivate batch and inject appropriate context to guide agent reply.
+
+**Text‑command activation** (`/mmm`, `/mmc`, `/mmm‑cancel`) and **text‑message buffering** continue to work via `before_agent_reply` (they do not rely on transcripts).
+
+**Examples of current behavior:**
+- `cleanedBody` = `<media:audio>` (13 chars) – no transcript.
+- `event.prompt` = `[media attached: /home/janwyl/.openclaw/media/inbound/file_…]` – contains audio‑file path.
+- Transcript file exists and contains correct text, but plugin cannot access it in `before_agent_reply`.
+- Voice activation currently fails; slash‑command activation works.
 
 ## Behavior
 
@@ -104,15 +104,23 @@ Detection steps:
 - **Voice transcription timing**: Each voice note is a separate hook invocation; transcription delays do not reorder messages.
 - **Very long buffers**: No size or message‑count limits are enforced (consider adding in future versions).
 
-## Implementation Status
+## Implementation Status (as of 2026‑04‑06)
 
-✅ All detection logic implemented (`extractTranscript`, `normalizeText`, `isActivationRequest`, `isDeactivationRequest`, `isCancelRequest`)
-✅ File‑system operations (`activateBatch`, `appendToBuffer`, `deactivateBatch`, `cancelBatch`)
-✅ Voice‑activation working with Telegram audio transcripts
-✅ Ordering preserved, clean‑up after injection
-✅ Error logging for file‑system failures
+✅ **Text‑command detection** – `/mmm`, `/mmc`, `/mmm‑cancel` work via `before_agent_reply`.
+✅ **Text‑message buffering** – Works when batch is active (via `before_agent_reply`).
+✅ **Deactivation & buffer injection** – `/mmc` triggers `before_prompt_build` and injects buffered content.
+✅ **File‑system operations** – `activateBatch`, `appendToBuffer`, `deactivateBatch`, `cancelBatch`.
+❌ **Voice‑activation** – Broken (transcript not in `cleanedBody`).
+❌ **Voice‑message buffering** – Broken (buffers `<media:audio>` placeholder, not transcript).
+⚠️ **Voice detection in `before_prompt_build`** – Not yet implemented.
+
+**Next steps:**
+1. Move voice‑activation detection from `before_agent_reply` to `before_prompt_build`.
+2. In `before_prompt_build`, parse audio‑file path from media‑attachment line, read transcript JSON, and activate batch if transcript matches `multimessagemode`.
+3. Ensure voice‑message buffering also uses the transcript (instead of placeholder) when batch is active.
+4. Keep text‑command detection and text‑message buffering unchanged in `before_agent_reply`.
 
 ---
 
-*Last updated: 2026‑04‑05*  
+*Last updated: 2026‑04‑06*  
 *Plugin ID: `multi‑message‑mode`*
