@@ -183,7 +183,20 @@ export default definePluginEntry({
       if (event.transcript) api.logger.info(`[multi-message-mode] event.transcript: ${event.transcript}`);
       if (event.media) api.logger.info(`[multi-message-mode] event.media keys: ${Object.keys(event.media).join(', ')}`);
       if (event.media && event.media.transcript) api.logger.info(`[multi-message-mode] event.media.transcript: ${event.media.transcript}`);
-      if (event.messages) api.logger.info(`[multi-message-mode] event.messages length: ${event.messages.length}`);
+      if (event.messages) {
+        api.logger.info(`[multi-message-mode] event.messages length: ${event.messages.length}`);
+        // Inspect the last 5 messages
+        for (let i = Math.max(0, event.messages.length - 5); i < event.messages.length; i++) {
+          const msg = event.messages[i];
+          let contentPreview = '';
+          if (msg.content && typeof msg.content === 'string') {
+            contentPreview = msg.content.replace(/\\n/g, '\\\\n').slice(0, 300);
+          } else if (msg.content && typeof msg.content === 'object') {
+            contentPreview = JSON.stringify(msg.content).slice(0, 300);
+          }
+          api.logger.info(`[multi-message-mode] message ${i}: role=${msg.role}, content=${contentPreview}`);
+        }
+      }
       const messageText = cleanedBody.trim();
 
       // Activation: /mmm or voice "multi-message mode"
@@ -246,12 +259,25 @@ export default definePluginEntry({
     api.on('before_prompt_build', async (event, ctx) => {
       // Check if prompt is a deactivation request (/mmc or voice "multi-message complete")
       const promptText = event.prompt || '';
-      api.logger.info(`[multi-message-mode] before_prompt_build prompt: ${promptText ? promptText.replace(/\\n/g, '\\\\n').slice(0, 150) : '(none)'}`);
+      api.logger.info(`[multi-message-mode] before_prompt_build prompt: ${promptText ? promptText.replace(/\\n/g, '\\\\n').slice(0, 500) : '(none)'}`);
       // Log other event fields that may contain transcript
       if (event.transcript) api.logger.info(`[multi-message-mode] before_prompt_build event.transcript: ${event.transcript}`);
       if (event.media) api.logger.info(`[multi-message-mode] before_prompt_build event.media keys: ${Object.keys(event.media).join(', ')}`);
       if (event.media && event.media.transcript) api.logger.info(`[multi-message-mode] before_prompt_build event.media.transcript: ${event.media.transcript}`);
-      if (event.messages) api.logger.info(`[multi-message-mode] before_prompt_build event.messages length: ${event.messages.length}`);
+      if (event.messages) {
+        api.logger.info(`[multi-message-mode] before_prompt_build event.messages length: ${event.messages.length}`);
+        // Inspect the last 5 messages
+        for (let i = Math.max(0, event.messages.length - 5); i < event.messages.length; i++) {
+          const msg = event.messages[i];
+          let contentPreview = '';
+          if (msg.content && typeof msg.content === 'string') {
+            contentPreview = msg.content.replace(/\\n/g, '\\\\n').slice(0, 300);
+          } else if (msg.content && typeof msg.content === 'object') {
+            contentPreview = JSON.stringify(msg.content).slice(0, 300);
+          }
+          api.logger.info(`[multi-message-mode] before_prompt_build message ${i}: role=${msg.role}, content=${contentPreview}`);
+        }
+      }
       const isDeactivation = promptText.includes('/mmc') || isDeactivationRequest(promptText);
       
       if (!isDeactivation) {
