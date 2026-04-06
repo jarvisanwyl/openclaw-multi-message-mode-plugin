@@ -64,16 +64,6 @@ const cancelBatch = async (identifier) => {
 
 
 
-// Extract transcript from voice message cleanedBody
-// Format: "[Audio]\nUser text:\n... Transcript:\nMulti-message mode."
-const extractTranscript = (cleanedBody) => {
-  if (!cleanedBody.includes('<media:audio>') || !cleanedBody.includes('Transcript:')) {
-    return null;
-  }
-  const match = cleanedBody.match(/Transcript:\n(.+?)(?:\n---|$)/s);
-  return match ? match[1].trim() : null;
-};
-
 // Extract audio file path from prompt media-attachment line
 // Format: "[media attached: /path/to/file.ogg ...]"
 const extractAudioPathFromPrompt = (promptText) => {
@@ -97,32 +87,16 @@ const normalizeText = (text) => {
   return text.toLowerCase().replace(/[^a-z]/g, '');
 };
 
-// Check if cleanedBody is an activation request (/mmm or voice "multi-message mode")
+// Check if cleanedBody is an activation request (/mmm only, voice handled in before_prompt_build)
 const isActivationRequest = (cleanedBody) => {
   const trimmed = cleanedBody.trim();
-  if (trimmed === '/mmm') {
-    return true;
-  }
-  const transcript = extractTranscript(cleanedBody);
-  if (!transcript || transcript.length > 30) {
-    return false; // Too long, treat as normal content
-  }
-  const normalized = normalizeText(transcript);
-  return normalized === 'multimessagemode';
+  return trimmed === '/mmm';
 };
 
-// Check if cleanedBody is a deactivation request (/mmc or voice "multi-message complete")
+// Check if cleanedBody is a deactivation request (/mmc only, voice handled in before_prompt_build)
 const isDeactivationRequest = (cleanedBody) => {
   const trimmed = cleanedBody.trim();
-  if (trimmed === '/mmc') {
-    return true;
-  }
-  const transcript = extractTranscript(cleanedBody);
-  if (!transcript || transcript.length > 30) {
-    return false;
-  }
-  const normalized = normalizeText(transcript);
-  return normalized === 'multimessagecomplete';
+  return trimmed === '/mmc';
 };
 
 // Check if cleanedBody is a cancel request (/mmm-cancel)
@@ -238,15 +212,9 @@ export default definePluginEntry({
         return undefined; // Let agent process normally
       }
       
-      // Batch is active - buffer transcript and cancel agent turn
+      // Batch is active - buffer message and cancel agent turn
       if (messageText) {
-        let content = messageText;
-        // If it's a voice message, extract just the transcript
-        const transcript = extractTranscript(cleanedBody);
-        if (transcript !== null) {
-          content = transcript;
-        }
-        await appendToBuffer(identifier, content);
+        await appendToBuffer(identifier, messageText);
       }
       
       return { handled: true, reply: { text: 'Message buffered.' } }; // Cancel agent turn and reply.
