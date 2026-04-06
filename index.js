@@ -191,6 +191,19 @@ export default definePluginEntry({
       const identifier = getIdentifier(ctx);
       api.logger.info(`[multi-message-mode] ctx keys: ${Object.keys(ctx).join(', ')}`);
       api.logger.info(`[multi-message-mode] ctx.sessionKey: ${ctx.sessionKey}`);
+      // Log all ctx values (safe)
+      const safeCtx = {};
+      for (const key of Object.keys(ctx)) {
+        const val = ctx[key];
+        if (typeof val === 'string' && val.length < 500) {
+          safeCtx[key] = val;
+        } else if (typeof val === 'object' && val !== null) {
+          safeCtx[key] = `[object ${val.constructor?.name || 'Object'}]`;
+        } else {
+          safeCtx[key] = typeof val;
+        }
+      }
+      api.logger.info(`[multi-message-mode] ctx (safe): ${JSON.stringify(safeCtx)}`);
       // Log any media/transcript related fields in ctx
       if (ctx.media) {
         api.logger.info(`[multi-message-mode] ctx.media keys: ${Object.keys(ctx.media).join(', ')}`);
@@ -216,6 +229,28 @@ export default definePluginEntry({
         }
       }
       api.logger.info(`[multi-message-mode] event (safe): ${JSON.stringify(safeEvent)}`);
+      // Log each event key with more detail
+      for (const key of Object.keys(event)) {
+        const val = event[key];
+        if (typeof val === 'string') {
+          api.logger.info(`[multi-message-mode] event.${key}: "${val.replace(/\n/g, '\\n').slice(0, 300)}"`);
+        } else if (typeof val === 'object' && val !== null) {
+          api.logger.info(`[multi-message-mode] event.${key} keys: ${Object.keys(val).join(', ')}`);
+          // If object has a transcript property
+          if (val.transcript && typeof val.transcript === 'string') {
+            api.logger.info(`[multi-message-mode] event.${key}.transcript: "${val.transcript}"`);
+          }
+          // If object has a path or file property
+          if (val.path && typeof val.path === 'string') {
+            api.logger.info(`[multi-message-mode] event.${key}.path: "${val.path}"`);
+          }
+          if (val.file && typeof val.file === 'string') {
+            api.logger.info(`[multi-message-mode] event.${key}.file: "${val.file}"`);
+          }
+        } else {
+          api.logger.info(`[multi-message-mode] event.${key}: ${typeof val}`);
+        }
+      }
       // Log specific suspected fields
       const suspected = ['media', 'transcript', 'originalBody', 'raw', 'body', 'text'];
       for (const key of suspected) {
