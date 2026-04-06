@@ -37,13 +37,36 @@ The plugin intercepts inbound messages via the OpenClaw `before_agent_reply` hoo
 - The plugin's `before_prompt_build` hook sees a media‑attachment line in `event.prompt` (e.g., `[media attached: /home/janwyl/.openclaw/media/inbound/file_…]`).
 - The transcript is **not present** in `event.transcript`, `event.media`, or `event.messages`.
 
-**Proposed fix:**
-1. **Voice activation** must be detected in `before_prompt_build` (where the media‑attachment line appears).
-2. Parse the audio‑file path from the attachment line.
-3. Derive the JSON path (replace `.ogg` with `.json`).
-4. Read the transcript (`text` property) from the JSON file (format: `{"text": "transcript here", "usage": {"type": "duration", "seconds": <number>}}`).
-5. Normalize and match against `multimessagemode` / `multimessagecomplete`.
-6. If match, activate/deactivate batch and inject appropriate context to guide agent reply.
+**Proposed fix (deferred‑transcript approach):**
+
+Since the whisper transcript is created **after** `before_prompt_build`, we bridge the timing gap by storing a reference to the audio file and checking for the transcript on the **next** message.
+
+**Flow:**
+1. **`before_prompt_build`** (when voice note arrives):
+   - Detect audio file path in `event.prompt` (media‑attachment line).
+   - Store the audio file path (or derived JSON path) in a temporary file keyed by session identifier: `/tmp/openclaw/multi‑message‑mode/pending/<normalized‑session‑id>.txt`.
+   - Do **not** attempt activation yet (transcript doesn’t exist).
+
+2. **Whisper transcription** happens asynchronously; JSON file is created.
+
+3. **`before_agent_reply`** (on the **next** message):
+   - Check for a pending‑audio file for the current session.
+   - If found:
+     - Read the stored audio file path.
+     - Derive JSON path (`audioPath.replace(/\.ogg$/, '.json')`).
+     - If JSON exists, read transcript (`text` property).
+     - Use transcript for **voice activation detection** (if batch inactive) or **voice buffering** (if batch active).
+     - Delete the pending‑audio file after processing.
+   - Then proceed with normal text‑command detection and buffering.
+
+**Result:**
+- Voice activation is deferred to the **next** message, but works because the transcript is available by then.
+- Voice buffering also works: the transcript (not `<media:audio>` placeholder) is stored in the buffer.
+- Text commands (`/mmm`, `/mmc`, `/mmm‑cancel`) and text buffering continue to work immediately.
+
+**Edge cases:**
+- If the user sends `/mmc` immediately after a voice activation command, the pending audio may not be processed. Consider processing pending audio **before** deactivation.
+- If the user sends multiple voice notes in quick succession, we may need to store multiple pending files (append to list).
 
 **Text‑command activation** (`/mmm`, `/mmc`, `/mmm‑cancel`) and **text‑message buffering** continue to work via `before_agent_reply` (they do not rely on transcripts).
 
@@ -91,7 +114,15 @@ The plugin intercepts inbound messages via the OpenClaw `before_agent_reply` hoo
 
 ## Plugin Hooks
 
-- **`before_agent_reply`**: Handles activation, cancellation, buffering, and deactivation detection. Blocks agent turns while batch is active.
+- **`before_agent_reply`**: 
+  - Handles text‑command activation (`/mmm`), cancellation (`/mmm‑cancel`), deactivation (`/mmc`).
+  - Buffers text messages when batch is active.
+  - Checks for pending audio transcript (from `before_prompt_build`) and processes for voice activation or buffering.
+
+- **`before_prompt_build`**: 
+  - Detects audio file in prompt (media‑attachment line).
+  - Stores audio file path in a pending file for later processing.
+  - Handles deactivation (`/mmc` or voice `multimessagecomplete`) and injects buffered content.activation detection. Blocks agent turns while batch is active.
 - **`before_prompt_build`**: Detects deactivation messages (`/mmc` or voice), reads the buffer, cleans up the directory, and injects the buffer via `prependContext`.
 
 ## Edge Cases & Error Handling
@@ -116,9 +147,11 @@ The plugin intercepts inbound messages via the OpenClaw `before_agent_reply` hoo
 ⚠️ **Voice detection in `before_prompt_build`** – Not yet implemented.
 
 **Next steps:**
-1. Move voice‑activation detection from `before_agent_reply` to `before_prompt_build`.
-2. In `before_prompt_build`, parse audio‑file path from media‑attachment line, read transcript JSON, and activate batch if transcript matches `multimessagemode`.
-3. Ensure voice‑message buffering also uses the transcript (instead of placeholder) when batch is active.
+1. Implement deferred‑transcript approach:
+   - In `before_prompt_build`, store audio file path in pending file keyed by session.
+   - In `before_agent_reply`, check for pending file, read transcript JSON, handle activation/buffering.
+2. Handle edge cases (e.g., `/mmc` before pending audio is processed).
+3. Test with multiple sequential voice notes.
 4. Keep text‑command detection and text‑message buffering unchanged in `before_agent_reply`.
 
 ---
