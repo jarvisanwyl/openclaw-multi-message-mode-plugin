@@ -31,7 +31,8 @@ The plugin intercepts inbound messages via the OpenClaw `before_agent_reply` hoo
 
 **Where the transcript lives:**
 - Audio file: `/home/janwyl/.openclaw/media/inbound/file_<uuid>.ogg`
-- Transcript file: `/home/janwyl/.openclaw/media/inbound/file_<uuid>.json` (contains `{"text": "transcript here"}`)
+- Transcript file: `/home/janwyl/.openclaw/media/inbound/file_<uuid>.json` (contains `{"text": "transcript here", "usage": {"type": "duration", "seconds": <number>}}`)
+  - **Example**: `{"text": "Another test message, let's see what this gives.", "usage": {"type": "duration", "seconds": 3}}`
 - The plugin's `before_agent_reply` hook sees only `<media:audio>` in `cleanedBody`.
 - The plugin's `before_prompt_build` hook sees a media‑attachment line in `event.prompt` (e.g., `[media attached: /home/janwyl/.openclaw/media/inbound/file_…]`).
 - The transcript is **not present** in `event.transcript`, `event.media`, or `event.messages`.
@@ -40,7 +41,7 @@ The plugin intercepts inbound messages via the OpenClaw `before_agent_reply` hoo
 1. **Voice activation** must be detected in `before_prompt_build` (where the media‑attachment line appears).
 2. Parse the audio‑file path from the attachment line.
 3. Derive the JSON path (replace `.ogg` with `.json`).
-4. Read the transcript from the JSON file.
+4. Read the transcript (`text` property) from the JSON file (format: `{"text": "transcript here", "usage": {"type": "duration", "seconds": <number>}}`).
 5. Normalize and match against `multimessagemode` / `multimessagecomplete`.
 6. If match, activate/deactivate batch and inject appropriate context to guide agent reply.
 
