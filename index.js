@@ -346,20 +346,44 @@ export default definePluginEntry({
     
     // ========================================
     // before_prompt_build hook
-    // Handles: /mmc - injects buffered content into LLM input
+    // Handles: activation (voice), deactivation (/mmc or voice), buffer injection
     // ========================================
     api.on('before_prompt_build', async (event, ctx) => {
-      // Check if prompt is a deactivation request (/mmc or voice "multi-message complete")
+      api.logger.info(`[multi-message-mode] before_prompt_build: event keys: ${Object.keys(event).join(', ')}`);
+      api.logger.info(`[multi-message-mode] before_prompt_build: event.prompt: ${event.prompt ? event.prompt.slice(0, 200) : '(none)'}`);
+      const identifier = getIdentifier(ctx);
+      api.logger.info(`[multi-message-mode] before_prompt_build identifier: ${identifier}`);
+      
+      if (!identifier) {
+        return undefined;
+      }
+      
+      const transcript = getTranscriptFromEvent(event);
+      api.logger.info(`[multi-message-mode] before_prompt_build transcript: ${transcript}`);
+      
+      // Activation detection (voice only; /mmm handled in before_agent_reply)
+      if (isActivationRequest(event)) {
+        api.logger.info(`[multi-message-mode] Voice activation detected for ${identifier}`);
+        const active = await isBatchActive(identifier);
+        if (active) {
+          api.logger.info(`[multi-message-mode] Batch already active for ${identifier}`);
+        } else {
+          await activateBatch(identifier);
+          api.logger.info(`[multi-message-mode] Batch activated via voice for ${identifier}`);
+          // Prepend context to guide agent reply
+          return {
+            prependContext: "The user said 'multi-message mode'. This is a command to activate multi-message mode. Respond with 'Multi-message mode activated. Send messages, then /mmc to release.'"
+          };
+        }
+        // Continue to allow normal processing (agent will reply with activation message)
+        return undefined;
+      }
+      
+      // Deactivation detection (/mmc or voice "multi-message complete")
       const promptText = event.prompt || '';
       const isDeactivation = promptText.includes('/mmc') || isDeactivationRequest(event);
       
       if (!isDeactivation) {
-        return undefined;
-      }
-      
-      const identifier = getIdentifier(ctx);
-      
-      if (!identifier) {
         return undefined;
       }
       
