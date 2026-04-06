@@ -178,6 +178,7 @@ export default definePluginEntry({
       }
       
       const cleanedBody = event.cleanedBody || '';
+      api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody.length} chars, preview: ${cleanedBody.replace(/\\n/g, '\\\\n').slice(0, 60)}`);
       const messageText = cleanedBody.trim();
 
       // Activation: /mmm or voice "multi-message mode"
@@ -240,6 +241,7 @@ export default definePluginEntry({
     api.on('before_prompt_build', async (event, ctx) => {
       // Check if prompt is a deactivation request (/mmc or voice "multi-message complete")
       const promptText = event.prompt || '';
+      api.logger.info(`[multi-message-mode] before_prompt_build prompt: ${promptText ? promptText.replace(/\\n/g, '\\\\n').slice(0, 150) : '(none)'}`);
       const isDeactivation = promptText.includes('/mmc') || isDeactivationRequest(promptText);
       
       if (!isDeactivation) {
