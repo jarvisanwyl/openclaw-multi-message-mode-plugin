@@ -74,6 +74,24 @@ const extractTranscript = (cleanedBody) => {
   return match ? match[1].trim() : null;
 };
 
+// Extract audio file path from prompt media-attachment line
+// Format: "[media attached: /path/to/file.ogg ...]"
+const extractAudioPathFromPrompt = (promptText) => {
+  const match = promptText.match(/\[media attached: (\/[^ \]]+\.ogg)/);
+  return match ? match[1] : null;
+};
+
+// Read transcript from JSON file (returns text property)
+const readTranscriptFromJson = async (jsonPath) => {
+  try {
+    const data = await fs.readFile(jsonPath, 'utf8');
+    const json = JSON.parse(data);
+    return json.text || null;
+  } catch (err) {
+    return null;
+  }
+};
+
 // Normalize text for keyword matching: lowercase, remove non-letter characters
 const normalizeText = (text) => {
   return text.toLowerCase().replace(/[^a-z]/g, '');
@@ -179,24 +197,6 @@ export default definePluginEntry({
       
       const cleanedBody = event.cleanedBody || '';
       api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody.length} chars, preview: ${cleanedBody.replace(/\\n/g, '\\\\n').slice(0, 60)}`);
-      // Log other event fields that may contain transcript
-      if (event.transcript) api.logger.info(`[multi-message-mode] event.transcript: ${event.transcript}`);
-      if (event.media) api.logger.info(`[multi-message-mode] event.media keys: ${Object.keys(event.media).join(', ')}`);
-      if (event.media && event.media.transcript) api.logger.info(`[multi-message-mode] event.media.transcript: ${event.media.transcript}`);
-      if (event.messages) {
-        api.logger.info(`[multi-message-mode] event.messages length: ${event.messages.length}`);
-        // Inspect the last 10 messages
-        for (let i = Math.max(0, event.messages.length - 10); i < event.messages.length; i++) {
-          const msg = event.messages[i];
-          let contentPreview = '';
-          if (msg.content && typeof msg.content === 'string') {
-            contentPreview = msg.content.replace(/\\n/g, '\\\\n').slice(0, 300);
-          } else if (msg.content && typeof msg.content === 'object') {
-            contentPreview = JSON.stringify(msg.content).slice(0, 300);
-          }
-          api.logger.info(`[multi-message-mode] message ${i}: role=${msg.role}, content=${contentPreview}`);
-        }
-      }
       const messageText = cleanedBody.trim();
 
       // Activation: /mmm or voice "multi-message mode"
@@ -254,41 +254,56 @@ export default definePluginEntry({
     
     // ========================================
     // before_prompt_build hook
-    // Handles: /mmc - injects buffered content into LLM input
+    // Handles: voice activation, deactivation (/mmc or voice), buffer injection
     // ========================================
     api.on('before_prompt_build', async (event, ctx) => {
-      // Check if prompt is a deactivation request (/mmc or voice "multi-message complete")
       const promptText = event.prompt || '';
       api.logger.info(`[multi-message-mode] before_prompt_build prompt: ${promptText ? promptText.replace(/\\n/g, '\\\\n').slice(0, 500) : '(none)'}`);
-      // Log other event fields that may contain transcript
-      if (event.transcript) api.logger.info(`[multi-message-mode] before_prompt_build event.transcript: ${event.transcript}`);
-      if (event.media) api.logger.info(`[multi-message-mode] before_prompt_build event.media keys: ${Object.keys(event.media).join(', ')}`);
-      if (event.media && event.media.transcript) api.logger.info(`[multi-message-mode] before_prompt_build event.media.transcript: ${event.media.transcript}`);
-      if (event.messages) {
-        api.logger.info(`[multi-message-mode] before_prompt_build event.messages length: ${event.messages.length}`);
-        // Inspect the last 10 messages
-        for (let i = Math.max(0, event.messages.length - 10); i < event.messages.length; i++) {
-          const msg = event.messages[i];
-          let contentPreview = '';
-          if (msg.content && typeof msg.content === 'string') {
-            contentPreview = msg.content.replace(/\\n/g, '\\\\n').slice(0, 300);
-          } else if (msg.content && typeof msg.content === 'object') {
-            contentPreview = JSON.stringify(msg.content).slice(0, 300);
-          }
-          api.logger.info(`[multi-message-mode] before_prompt_build message ${i}: role=${msg.role}, content=${contentPreview}`);
-        }
+      
+      const identifier = getIdentifier(ctx);
+      if (!identifier) {
+        return undefined;
       }
-      const isDeactivation = promptText.includes('/mmc') || isDeactivationRequest(promptText);
+      
+      // Try to extract audio file path from prompt (for voice activation/deactivation)
+      const audioPath = extractAudioPathFromPrompt(promptText);
+      let transcript = null;
+      
+      if (audioPath) {
+        // Derive JSON path and read transcript
+        const jsonPath = audioPath.replace(/\.ogg$/, '.json');
+        transcript = await readTranscriptFromJson(jsonPath);
+        api.logger.info(`[multi-message-mode] extracted transcript from JSON: ${transcript}`);
+      }
+      
+      // Normalize transcript for keyword matching
+      const normalized = transcript ? normalizeText(transcript) : '';
+      
+      // Voice activation detection
+      if (normalized === 'multimessagemode') {
+        api.logger.info(`[multi-message-mode] Voice activation detected for ${identifier}`);
+        const active = await isBatchActive(identifier);
+        if (active) {
+          api.logger.info(`[multi-message-mode] Batch already active for ${identifier}`);
+        } else {
+          await activateBatch(identifier);
+          api.logger.info(`[multi-message-mode] Batch activated via voice for ${identifier}`);
+        }
+        // Return a prependContext to guide agent reply
+        return {
+          prependContext: "The user said 'multi-message mode'. This is a command to activate multi-message mode. Respond with 'Multi-message mode activated. Send messages, then /mmc to release.' and do not process the audio content."
+        };
+      }
+      
+      // Voice deactivation detection
+      const isDeactivation = promptText.includes('/mmc') || normalized === 'multimessagecomplete';
       
       if (!isDeactivation) {
         return undefined;
       }
       
-      const identifier = getIdentifier(ctx);
-      
-      if (!identifier) {
-        return undefined;
-      }
+      // Deactivation handling (voice or text)
+      api.logger.info(`[multi-message-mode] Deactivation triggered for ${identifier}`);
       
       // Read the buffer
       const dir = getBatchDir(identifier);
