@@ -178,9 +178,14 @@ export default definePluginEntry({
       }
       
       const cleanedBody = event.cleanedBody || '';
+      api.logger.info(`[multi-message-mode] cleanedBody (first 200 chars): ${cleanedBody.slice(0, 200).replace(/\n/g, '\\n')}`);
       const messageText = cleanedBody.trim();
 
       // Activation: /mmm or voice "multi-message mode"
+      const transcript = extractTranscript(cleanedBody);
+      api.logger.info(`[multi-message-mode] transcript: ${transcript}`);
+      const normalized = normalizeText(transcript || '');
+      api.logger.info(`[multi-message-mode] normalized: ${normalized}`);
       if (isActivationRequest(cleanedBody)) {
         api.logger.info(`[multi-message-mode] Activate command for ${identifier}`);
         const active = await isBatchActive(identifier);
@@ -204,6 +209,10 @@ export default definePluginEntry({
       
       // Deactivation: /mmc or voice "multi-message complete"
       // Let through to before_prompt_build
+      const transcript2 = extractTranscript(cleanedBody);
+      api.logger.info(`[multi-message-mode] deactivation transcript: ${transcript2}`);
+      const normalized2 = normalizeText(transcript2 || '');
+      api.logger.info(`[multi-message-mode] deactivation normalized: ${normalized2}`);
       if (isDeactivationRequest(cleanedBody)) {
         const active = await isBatchActive(identifier);
         if (active) {
