@@ -84,6 +84,17 @@ const getTranscriptFromEvent = (event) => {
   if (event.media && event.media.transcript && typeof event.media.transcript === 'string') {
     return event.media.transcript.trim();
   }
+  // Try event.prompt (used in before_prompt_build)
+  if (event.prompt && typeof event.prompt === 'string') {
+    // If prompt is short and looks like a transcript (no special formatting)
+    const prompt = event.prompt.trim();
+    if (prompt.length > 0 && prompt.length < 100 && !prompt.includes('\n')) {
+      return prompt;
+    }
+    // Try to extract from embedded format (Transcript: ...)
+    const match = prompt.match(/Transcript:\s*(.+?)(?:\n---|$)/s);
+    if (match) return match[1].trim();
+  }
   // Fallback to old cleanedBody extraction
   const cleanedBody = event.cleanedBody || '';
   return extractTranscript(cleanedBody);
@@ -216,6 +227,8 @@ export default definePluginEntry({
       }
       
       api.logger.info(`[multi-message-mode] event keys: ${Object.keys(event).join(', ')}`);
+      api.logger.info(`[multi-message-mode] event own properties: ${JSON.stringify(Object.getOwnPropertyNames(event))}`);
+      api.logger.info(`[multi-message-mode] event.constructor: ${event.constructor?.name}`);
       // Log a safe subset of event (excluding large nested objects)
       const safeEvent = {};
       for (const key of Object.keys(event)) {
