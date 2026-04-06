@@ -62,6 +62,39 @@ const cancelBatch = async (identifier) => {
   } catch (err) {}
 };
 
+const PENDING_ROOT = '/tmp/openclaw/multi-message-mode/pending';
+
+// Get pending audio file path for a given identifier
+const getPendingAudioPath = (identifier) => {
+  const normalized = normalizeIdentifier(identifier);
+  return join(PENDING_ROOT, `audio_${normalized}.txt`);
+};
+
+// Store pending audio file path
+const writePendingAudio = async (identifier, audioPath) => {
+  await fs.mkdir(PENDING_ROOT, { recursive: true });
+  const pendingPath = getPendingAudioPath(identifier);
+  await fs.writeFile(pendingPath, audioPath);
+};
+
+// Read pending audio file path
+const readPendingAudio = async (identifier) => {
+  try {
+    const pendingPath = getPendingAudioPath(identifier);
+    return await fs.readFile(pendingPath, 'utf8');
+  } catch (err) {
+    return null;
+  }
+};
+
+// Delete pending audio file
+const deletePendingAudio = async (identifier) => {
+  try {
+    const pendingPath = getPendingAudioPath(identifier);
+    await fs.unlink(pendingPath);
+  } catch (err) {}
+};
+
 
 
 // Extract audio file path from prompt media-attachment line
@@ -173,7 +206,71 @@ export default definePluginEntry({
       api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody.length} chars, preview: ${cleanedBody.replace(/\\n/g, '\\\\n').slice(0, 60)}`);
       const messageText = cleanedBody.trim();
 
-      // Activation: /mmm or voice "multi-message mode"
+      // Check for pending audio from before_prompt_build
+      const pendingAudio = await readPendingAudio(identifier);
+      if (pendingAudio) {
+        api.logger.info(`[multi-message-mode] Found pending audio: ${pendingAudio}`);
+        const jsonPath = pendingAudio.replace(/\.ogg$/, '.json');
+        const transcript = await readTranscriptFromJson(jsonPath);
+        if (transcript) {
+          api.logger.info(`[multi-message-mode] Read transcript: ${transcript}`);
+          const normalized = normalizeText(transcript);
+          
+          // Voice activation detection
+          if (normalized === 'multimessagemode') {
+            api.logger.info(`[multi-message-mode] Voice activation detected for ${identifier}`);
+            const active = await isBatchActive(identifier);
+            if (active) {
+              await deletePendingAudio(identifier);
+              return { handled: true, reply: { text: 'Multi-message mode already active.' } };
+            }
+            await activateBatch(identifier);
+            await deletePendingAudio(identifier);
+            return { handled: true, reply: { text: 'Multi-message mode activated. Send messages, then /mmc to release.' } };
+          }
+          
+          // Voice deactivation detection
+          if (normalized === 'multimessagecomplete') {
+            api.logger.info(`[multi-message-mode] Voice deactivation detected for ${identifier}`);
+            const dir = getBatchDir(identifier);
+            let bufferContent = '';
+            try {
+              bufferContent = await fs.readFile(join(dir, 'buffer.txt'), 'utf8');
+            } catch (err) {}
+            
+            if (!bufferContent.trim()) {
+              await deletePendingAudio(identifier);
+              return { handled: true, reply: { text: 'The user released a multi-message batch, but no messages were buffered.' } };
+            }
+            
+            // Clean up batch directory
+            try {
+              await cancelBatch(identifier);
+            } catch (err) {
+              api.logger.warn(`[multi-message-mode] Failed to clean up batch for ${identifier}: ${err.message}`);
+            }
+            
+            await deletePendingAudio(identifier);
+            // Return buffer content for processing
+            return {
+              handled: true,
+              reply: { text: `The user has collected the following messages via multi-message mode. Process them as a single request:\n---\n${bufferContent}---\n\n` }
+            };
+          }
+          
+          // Voice buffering (if batch active)
+          const active = await isBatchActive(identifier);
+          if (active) {
+            api.logger.info(`[multi-message-mode] Buffering voice transcript for ${identifier}`);
+            await appendToBuffer(identifier, transcript);
+            await deletePendingAudio(identifier);
+            return { handled: true, reply: { text: 'Message buffered.' } };
+          }
+        }
+        await deletePendingAudio(identifier);
+      }
+
+      // Activation: /mmm only (voice handled above)
       if (isActivationRequest(cleanedBody)) {
         api.logger.info(`[multi-message-mode] Activate command for ${identifier}`);
         const active = await isBatchActive(identifier);
@@ -222,7 +319,7 @@ export default definePluginEntry({
     
     // ========================================
     // before_prompt_build hook
-    // Handles: voice activation, deactivation (/mmc or voice), buffer injection
+    // Handles: stores pending audio path, deactivation, buffer injection
     // ========================================
     api.on('before_prompt_build', async (event, ctx) => {
       const promptText = event.prompt || '';
@@ -233,37 +330,15 @@ export default definePluginEntry({
         return undefined;
       }
       
-      // Try to extract audio file path from prompt (for voice activation/deactivation)
+      // Check for audio file in prompt (media-attachment line)
       const audioPath = extractAudioPathFromPrompt(promptText);
-      let transcript = null;
-      
       if (audioPath) {
-        // Derive JSON path and read transcript
-        const jsonPath = audioPath.replace(/\.ogg$/, '.json');
-        transcript = await readTranscriptFromJson(jsonPath);
-        api.logger.info(`[multi-message-mode] extracted transcript from JSON: ${transcript}`);
+        api.logger.info(`[multi-message-mode] Storing pending audio path: ${audioPath}`);
+        await writePendingAudio(identifier, audioPath);
       }
       
-      // Normalize transcript for keyword matching
-      const normalized = transcript ? normalizeText(transcript) : '';
-      
-      // Voice activation detection
-      if (normalized === 'multimessagemode') {
-        api.logger.info(`[multi-message-mode] Voice activation detected for ${identifier}`);
-        const active = await isBatchActive(identifier);
-        if (active) {
-          api.logger.info(`[multi-message-mode] Batch already active for ${identifier}`);
-        } else {
-          await activateBatch(identifier);
-          api.logger.info(`[multi-message-mode] Batch activated via voice for ${identifier}`);
-        }
-        // Return a prependContext to guide agent reply
-        return {
-          prependContext: "The user said 'multi-message mode'. This is a command to activate multi-message mode. Respond with 'Multi-message mode activated. Send messages, then /mmc to release.' and do not process the audio content."
-        };
-      }
-      
-      // Voice deactivation detection
+      // Check for deactivation command
+      const normalized = normalizeText(promptText);
       const isDeactivation = promptText.includes('/mmc') || normalized === 'multimessagecomplete';
       
       if (!isDeactivation) {
