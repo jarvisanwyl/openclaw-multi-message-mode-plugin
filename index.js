@@ -95,6 +95,31 @@ const getTranscriptFromEvent = (event) => {
     const match = prompt.match(/Transcript:\s*(.+?)(?:\n---|$)/s);
     if (match) return match[1].trim();
   }
+  // Try event.messages (used in before_prompt_build)
+  if (event.messages && Array.isArray(event.messages)) {
+    // Look for the most recent user message
+    for (let i = event.messages.length - 1; i >= 0; i--) {
+      const msg = event.messages[i];
+      if (msg.role === 'user' && msg.content) {
+        let text = '';
+        if (typeof msg.content === 'string') {
+          text = msg.content;
+        } else if (msg.content.text && typeof msg.content.text === 'string') {
+          text = msg.content.text;
+        }
+        if (text) {
+          // Try to extract transcript from embedded format
+          const match = text.match(/Transcript:\s*(.+?)(?:\n---|$)/s);
+          if (match) return match[1].trim();
+          // If text is short and doesn't contain newlines, assume it's the transcript
+          if (text.length < 100 && !text.includes('\n')) {
+            return text.trim();
+          }
+        }
+        break;
+      }
+    }
+  }
   // Fallback to old cleanedBody extraction
   const cleanedBody = event.cleanedBody || '';
   return extractTranscript(cleanedBody);
@@ -351,6 +376,14 @@ export default definePluginEntry({
     api.on('before_prompt_build', async (event, ctx) => {
       api.logger.info(`[multi-message-mode] before_prompt_build: event keys: ${Object.keys(event).join(', ')}`);
       api.logger.info(`[multi-message-mode] before_prompt_build: event.prompt: ${event.prompt ? event.prompt.slice(0, 200) : '(none)'}`);
+      if (event.messages) {
+        api.logger.info(`[multi-message-mode] before_prompt_build: event.messages length: ${event.messages.length}`);
+        for (let i = 0; i < Math.min(event.messages.length, 3); i++) {
+          const msg = event.messages[i];
+          const content = msg.content;
+          api.logger.info(`[multi-message-mode] before_prompt_build: message ${i}: role=${msg.role}, content_type=${typeof content}, content_preview=${typeof content === 'string' ? content.replace(/\\n/g, '\\\\n').slice(0, 150) : JSON.stringify(content).slice(0, 150)}`);
+        }
+      }
       const identifier = getIdentifier(ctx);
       api.logger.info(`[multi-message-mode] before_prompt_build identifier: ${identifier}`);
       
