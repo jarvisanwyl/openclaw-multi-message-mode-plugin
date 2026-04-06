@@ -177,6 +177,20 @@ export default definePluginEntry({
         return undefined;
       }
       
+      api.logger.info(`[multi-message-mode] event keys: ${Object.keys(event).join(', ')}`);
+      // Log a safe subset of event (excluding large nested objects)
+      const safeEvent = {};
+      for (const key of Object.keys(event)) {
+        const val = event[key];
+        if (typeof val === 'string' && val.length < 500) {
+          safeEvent[key] = val;
+        } else if (typeof val === 'object' && val !== null) {
+          safeEvent[key] = `[object ${val.constructor?.name || 'Object'}]`;
+        } else {
+          safeEvent[key] = typeof val;
+        }
+      }
+      api.logger.info(`[multi-message-mode] event (safe): ${JSON.stringify(safeEvent)}`);
       const cleanedBody = event.cleanedBody || '';
       api.logger.info(`[multi-message-mode] cleanedBody (first 200 chars): ${cleanedBody.slice(0, 200).replace(/\n/g, '\\n')}`);
       const messageText = cleanedBody.trim();
