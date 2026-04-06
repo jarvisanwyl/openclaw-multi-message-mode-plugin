@@ -74,18 +74,34 @@ const extractTranscript = (cleanedBody) => {
   return match ? match[1].trim() : null;
 };
 
+// Get transcript from event object (supports old embedded format and new fields)
+const getTranscriptFromEvent = (event) => {
+  // First try event.transcript
+  if (event.transcript && typeof event.transcript === 'string') {
+    return event.transcript.trim();
+  }
+  // Then try event.media?.transcript
+  if (event.media && event.media.transcript && typeof event.media.transcript === 'string') {
+    return event.media.transcript.trim();
+  }
+  // Fallback to old cleanedBody extraction
+  const cleanedBody = event.cleanedBody || '';
+  return extractTranscript(cleanedBody);
+};
+
 // Normalize text for keyword matching: lowercase, remove non-letter characters
 const normalizeText = (text) => {
   return text.toLowerCase().replace(/[^a-z]/g, '');
 };
 
-// Check if cleanedBody is an activation request (/mmm or voice "multi-message mode")
-const isActivationRequest = (cleanedBody) => {
+// Check if event is an activation request (/mmm or voice "multi-message mode")
+const isActivationRequest = (event) => {
+  const cleanedBody = event.cleanedBody || '';
   const trimmed = cleanedBody.trim();
   if (trimmed === '/mmm') {
     return true;
   }
-  const transcript = extractTranscript(cleanedBody);
+  const transcript = getTranscriptFromEvent(event);
   if (!transcript || transcript.length > 30) {
     return false; // Too long, treat as normal content
   }
@@ -93,13 +109,14 @@ const isActivationRequest = (cleanedBody) => {
   return normalized === 'multimessagemode';
 };
 
-// Check if cleanedBody is a deactivation request (/mmc or voice "multi-message complete")
-const isDeactivationRequest = (cleanedBody) => {
+// Check if event is a deactivation request (/mmc or voice "multi-message complete")
+const isDeactivationRequest = (event) => {
+  const cleanedBody = event.cleanedBody || '';
   const trimmed = cleanedBody.trim();
   if (trimmed === '/mmc') {
     return true;
   }
-  const transcript = extractTranscript(cleanedBody);
+  const transcript = getTranscriptFromEvent(event);
   if (!transcript || transcript.length > 30) {
     return false;
   }
@@ -172,6 +189,14 @@ export default definePluginEntry({
     // ========================================
     api.on('before_agent_reply', async (event, ctx) => {
       const identifier = getIdentifier(ctx);
+      api.logger.info(`[multi-message-mode] ctx keys: ${Object.keys(ctx).join(', ')}`);
+      api.logger.info(`[multi-message-mode] ctx.sessionKey: ${ctx.sessionKey}`);
+      // Log any media/transcript related fields in ctx
+      if (ctx.media) {
+        api.logger.info(`[multi-message-mode] ctx.media keys: ${Object.keys(ctx.media).join(', ')}`);
+        if (ctx.media.transcript) api.logger.info(`[multi-message-mode] ctx.media.transcript: ${ctx.media.transcript}`);
+      }
+      if (ctx.transcript) api.logger.info(`[multi-message-mode] ctx.transcript: ${ctx.transcript}`);
       
       if (!identifier) {
         return undefined;
@@ -191,16 +216,31 @@ export default definePluginEntry({
         }
       }
       api.logger.info(`[multi-message-mode] event (safe): ${JSON.stringify(safeEvent)}`);
+      // Log specific suspected fields
+      const suspected = ['media', 'transcript', 'originalBody', 'raw', 'body', 'text'];
+      for (const key of suspected) {
+        if (key in event) {
+          const val = event[key];
+          if (typeof val === 'string') {
+            api.logger.info(`[multi-message-mode] event.${key} (first 200): ${val.slice(0, 200).replace(/\n/g, '\\n')}`);
+          } else if (typeof val === 'object' && val !== null) {
+            api.logger.info(`[multi-message-mode] event.${key} keys: ${Object.keys(val).join(', ')}`);
+            if (val.transcript && typeof val.transcript === 'string') {
+              api.logger.info(`[multi-message-mode] event.${key}.transcript: ${val.transcript}`);
+            }
+          }
+        }
+      }
       const cleanedBody = event.cleanedBody || '';
       api.logger.info(`[multi-message-mode] cleanedBody (first 200 chars): ${cleanedBody.slice(0, 200).replace(/\n/g, '\\n')}`);
       const messageText = cleanedBody.trim();
 
       // Activation: /mmm or voice "multi-message mode"
-      const transcript = extractTranscript(cleanedBody);
+      const transcript = getTranscriptFromEvent(event);
       api.logger.info(`[multi-message-mode] transcript: ${transcript}`);
       const normalized = normalizeText(transcript || '');
       api.logger.info(`[multi-message-mode] normalized: ${normalized}`);
-      if (isActivationRequest(cleanedBody)) {
+      if (isActivationRequest(event)) {
         api.logger.info(`[multi-message-mode] Activate command for ${identifier}`);
         const active = await isBatchActive(identifier);
         if (active) {
@@ -223,11 +263,11 @@ export default definePluginEntry({
       
       // Deactivation: /mmc or voice "multi-message complete"
       // Let through to before_prompt_build
-      const transcript2 = extractTranscript(cleanedBody);
+      const transcript2 = getTranscriptFromEvent(event);
       api.logger.info(`[multi-message-mode] deactivation transcript: ${transcript2}`);
       const normalized2 = normalizeText(transcript2 || '');
       api.logger.info(`[multi-message-mode] deactivation normalized: ${normalized2}`);
-      if (isDeactivationRequest(cleanedBody)) {
+      if (isDeactivationRequest(event)) {
         const active = await isBatchActive(identifier);
         if (active) {
           api.logger.info(`[multi-message-mode] /mmc received, deactivating for ${identifier}`);
@@ -246,7 +286,7 @@ export default definePluginEntry({
       if (messageText) {
         let content = messageText;
         // If it's a voice message, extract just the transcript
-        const transcript = extractTranscript(cleanedBody);
+        const transcript = getTranscriptFromEvent(event);
         if (transcript !== null) {
           content = transcript;
         }
@@ -263,7 +303,7 @@ export default definePluginEntry({
     api.on('before_prompt_build', async (event, ctx) => {
       // Check if prompt is a deactivation request (/mmc or voice "multi-message complete")
       const promptText = event.prompt || '';
-      const isDeactivation = promptText.includes('/mmc') || isDeactivationRequest(promptText);
+      const isDeactivation = promptText.includes('/mmc') || isDeactivationRequest(event);
       
       if (!isDeactivation) {
         return undefined;
