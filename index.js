@@ -185,8 +185,8 @@ export default definePluginEntry({
       if (event.media && event.media.transcript) api.logger.info(`[multi-message-mode] event.media.transcript: ${event.media.transcript}`);
       if (event.messages) {
         api.logger.info(`[multi-message-mode] event.messages length: ${event.messages.length}`);
-        // Inspect the last 5 messages
-        for (let i = Math.max(0, event.messages.length - 5); i < event.messages.length; i++) {
+        // Inspect the last 10 messages
+        for (let i = Math.max(0, event.messages.length - 10); i < event.messages.length; i++) {
           const msg = event.messages[i];
           let contentPreview = '';
           if (msg.content && typeof msg.content === 'string') {
@@ -266,8 +266,8 @@ export default definePluginEntry({
       if (event.media && event.media.transcript) api.logger.info(`[multi-message-mode] before_prompt_build event.media.transcript: ${event.media.transcript}`);
       if (event.messages) {
         api.logger.info(`[multi-message-mode] before_prompt_build event.messages length: ${event.messages.length}`);
-        // Inspect the last 5 messages
-        for (let i = Math.max(0, event.messages.length - 5); i < event.messages.length; i++) {
+        // Inspect the last 10 messages
+        for (let i = Math.max(0, event.messages.length - 10); i < event.messages.length; i++) {
           const msg = event.messages[i];
           let contentPreview = '';
           if (msg.content && typeof msg.content === 'string') {
