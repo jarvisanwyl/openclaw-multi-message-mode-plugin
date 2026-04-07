@@ -324,8 +324,18 @@ export default definePluginEntry({
     // ========================================
     
     api.on('before_dispatch', async (event, ctx) => {
-      api.logger.info(`[multi-message-mode] before_prompt_build event: ${JSON.stringify(event, null, 2)}`)
-      api.logger.info(`[multi-message-mode] before_prompt_build ctx: ${JSON.stringify(ctx, null, 2)}`)
+      api.logger.info(`[multi-message-mode] before_dispatch event: ${JSON.stringify(event, null, 2)}`)
+      api.logger.info(`[multi-message-mode] before_dispatch ctx: ${JSON.stringify(ctx, null, 2)}`)
+    return undefined
+    }, { priority: 100 });
+    
+    // ========================================
+    // reply_dispatch hook
+    // ========================================
+    
+    api.on('reply_dispatch', async (event, ctx) => {
+      api.logger.info(`[multi-message-mode] reply_dispatch event: ${JSON.stringify(event, null, 2)}`)
+      api.logger.info(`[multi-message-mode] reply_dispatch ctx: ${JSON.stringify(ctx, null, 2)}`)
     return undefined
     }, { priority: 100 });
     
