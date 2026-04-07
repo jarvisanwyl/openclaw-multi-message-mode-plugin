@@ -1,5 +1,5 @@
 import { promises as fs } from 'fs';
-import { join, path } from 'path';
+import { join, extname } from 'path';
 import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry';
 
 const BATCH_ROOT = '/tmp/openclaw/multi-message-mode/batch';
@@ -370,7 +370,8 @@ export default definePluginEntry({
       api.logger.info(`[multi-message-mode] reply_dispatch isAudioMessage: ${isAudioMessage}`)
       if (isAudioMessage) {
         const audioPath = event.ctx.MediaPath || '';
-        const ext = path.extname(audioPath);
+        api.logger.info(`[multi-message-mode] reply_dispatch audioPath: ${audioPath}`)
+        const ext = extname(audioPath);
         const audioPathWithoutExt = audioPath.slice(0, -ext.length);
         await writePendingAudio(identifier, audioPath);
         api.logger.info(`[multi-message-mode] Storing pending audio path: ${audioPathWithoutExt}`)
