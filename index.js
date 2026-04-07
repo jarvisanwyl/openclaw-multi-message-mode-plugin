@@ -369,7 +369,7 @@ export default definePluginEntry({
       api.logger.info(`[multi-message-mode] reply_dispatch bodyForAgent: ${bodyForAgent}`)
       api.logger.info(`[multi-message-mode] reply_dispatch isAudioMessage: ${isAudioMessage}`)
       if (isAudioMessage) {
-        const audioPath = event.mediaPath || '';
+        const audioPath = event.ctx.MediaPath || '';
         const ext = path.extname(mediaPath);
         const audioPathWithoutExt = audioPath.slice(0, -ext.length);
         await writePendingAudio(identifier, audioPath);
