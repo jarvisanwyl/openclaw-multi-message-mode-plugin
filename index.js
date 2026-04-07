@@ -366,6 +366,8 @@ export default definePluginEntry({
       
       const bodyForAgent = event.bodyForAgent || '';
       const isAudioMessage = bodyForAgent == '<media:audio>';
+      api.logger.info(`[multi-message-mode] reply_dispatch bodyForAgent: ${bodyForAgent}`)
+      api.logger.info(`[multi-message-mode] reply_dispatch isAudioMessage: ${isAudioMessage}`)
       if (isAudioMessage) {
         const audioPath = event.mediaPath || '';
         const ext = path.extname(mediaPath);
