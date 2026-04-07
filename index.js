@@ -199,6 +199,28 @@ export default definePluginEntry({
       api.logger.info(`[multi-message-mode] before_agent_reply event: ${JSON.stringify(event, null, 2)}`)
       api.logger.info(`[multi-message-mode] before_agent_reply ctx: ${JSON.stringify(ctx, null, 2)}`)
 
+      const identifier = getIdentifier(ctx);
+      if (!identifier) {
+        return undefined;
+      }
+      
+      // Check for pending audio from before_prompt_build
+      const pendingAudio = await readPendingAudio(identifier);
+      if (pendingAudio) {
+        api.logger.info(`[multi-message-mode] Found pending audio: ${pendingAudio}`);
+        const transcriptPath = pendingAudio + '.txt'
+        try {
+          const transcript = await fs.readFile(transcriptPath, 'utf8');
+          api.logger.info(`[multi-message-mode] Transcript: ${transcript}`);
+        } catch (err) {
+          if (err.code === "ENOENT") {
+            api.logger.info(`[multi-message-mode] Transcript file ${transcriptPath} does not exist`);
+          } else {
+            throw err;
+          }
+        }
+      }
+      
       // // Check for pending audio from before_prompt_build
       // const pendingAudio = await readPendingAudio(identifier);
       // if (pendingAudio) {
