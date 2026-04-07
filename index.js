@@ -1,5 +1,5 @@
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { join, path } from 'path';
 import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry';
 
 const BATCH_ROOT = '/tmp/openclaw/multi-message-mode/batch';
@@ -317,6 +317,20 @@ export default definePluginEntry({
     // ========================================
     
     api.on('reply_dispatch', async (event, ctx) => {
+      const identifier = getIdentifier(ctx);
+      if (!identifier) {
+        return undefined;
+      }
+      
+      const bodyForAgent = event.bodyForAgent || '';
+      const isAudioMessage = bodyForAgent == '<media@audio>';
+      if (isAudioMessage) {
+        const audioPath = event.mediaPath || '';
+        const ext = path.extname(mediaPath);
+        const audioPathWithoutExt = audioPath.slice(0, -ext.length);
+        await writePendingAudio(identifier, audioPath);
+        api.logger.info(`[multi-message-mode] Storing pending audio path: ${audioPathWithoutExt}`)
+      }
       api.logger.info(`[multi-message-mode] reply_dispatch event: ${JSON.stringify(event, null, 2)}`)
     return undefined
     }, { priority: 100 });
