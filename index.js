@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import { join, extname } from 'path';
 import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry';
+import { transcribeFirstAudio } from 'openclaw/plugin-sdk/media-runtime';
 
 const BATCH_ROOT = '/tmp/openclaw/multi-message-mode/batch';
 
@@ -217,6 +218,13 @@ export default definePluginEntry({
       api.logger.info(`[multi-message-mode] before_agent_reply event: ${JSON.stringify(event, null, 2)}`)
       api.logger.info(`[multi-message-mode] before_agent_reply ctx: ${JSON.stringify(ctx, null, 2)}`)
 
+      try { 
+        const testLoad = transcribeFirstAudio;
+        api.logger.info(`[multi-message-mode] before_agent_reply imported transcribeFirstAudio`);
+      } catch (err) {
+        api.logger.info(`[multi-message-mode] before_agent_reply ERROR: Failed to import transcribeFirstAudio`);
+      }
+      
       const identifier = getIdentifier(ctx);
       if (!identifier) {
         return undefined;
