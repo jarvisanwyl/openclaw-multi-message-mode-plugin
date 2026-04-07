@@ -225,14 +225,14 @@ export default definePluginEntry({
       // Check for pending audio from before_prompt_build
       const pendingAudio = await readPendingAudio(identifier);
       if (pendingAudio) {
-        api.logger.info(`[multi-message-mode] Found pending audio: ${pendingAudio}`);
+        api.logger.info(`[multi-message-mode] before_agent_reply Found pending audio: ${pendingAudio}`);
         const transcriptPath = pendingAudio + '.txt'
         try {
           const transcript = await fs.readFile(transcriptPath, 'utf8');
-          api.logger.info(`[multi-message-mode] Transcript: ${transcript}`);
+          api.logger.info(`[multi-message-mode] before_agent_reply Transcript: ${transcript}`);
         } catch (err) {
           if (err.code === "ENOENT") {
-            api.logger.info(`[multi-message-mode] Transcript file ${transcriptPath} does not exist`);
+            api.logger.info(`[multi-message-mode] before_agent_reply Transcript file ${transcriptPath} does not exist`);
           } else {
             throw err;
           }
@@ -373,7 +373,7 @@ export default definePluginEntry({
         api.logger.info(`[multi-message-mode] reply_dispatch audioPath: ${audioPath}`)
         const ext = extname(audioPath);
         const audioPathWithoutExt = audioPath.slice(0, -ext.length);
-        await writePendingAudio(identifier, audioPath);
+        await writePendingAudio(identifier, audioPathWithoutExt);
         api.logger.info(`[multi-message-mode] Storing pending audio path: ${audioPathWithoutExt}`)
       }
       api.logger.info(`[multi-message-mode] reply_dispatch event: ${JSON.stringify(event, null, 2)}`)
@@ -388,6 +388,27 @@ export default definePluginEntry({
     api.on('before_prompt_build', async (event, ctx) => {
       api.logger.info(`[multi-message-mode] before_prompt_build event: ${event.prompt}`)
       api.logger.info(`[multi-message-mode] before_prompt_build ctx: ${JSON.stringify(ctx, null, 2)}`)
+      
+      const identifier = getIdentifier(ctx);
+      if (!identifier) {
+        return undefined;
+      }
+      
+      const pendingAudio = await readPendingAudio(identifier);
+      if (pendingAudio) {
+        api.logger.info(`[multi-message-mode] before_prompt_build Found pending audio: ${pendingAudio}`);
+        const transcriptPath = pendingAudio + '.txt'
+        try {
+          const transcript = await fs.readFile(transcriptPath, 'utf8');
+          api.logger.info(`[multi-message-mode] before_prompt_build Transcript: ${transcript}`);
+        } catch (err) {
+          if (err.code === "ENOENT") {
+            api.logger.info(`[multi-message-mode] before_prompt_build Transcript file ${transcriptPath} does not exist`);
+          } else {
+            throw err;
+          }
+        }
+      }
       
       // const identifier = getIdentifier(ctx);
       // if (!identifier) {
