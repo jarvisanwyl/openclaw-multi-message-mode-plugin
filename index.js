@@ -365,7 +365,7 @@ export default definePluginEntry({
       }
       
       const bodyForAgent = event.bodyForAgent || '';
-      const isAudioMessage = bodyForAgent == '<media@audio>';
+      const isAudioMessage = bodyForAgent == '<media:audio>';
       if (isAudioMessage) {
         const audioPath = event.mediaPath || '';
         const ext = path.extname(mediaPath);
