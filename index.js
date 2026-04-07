@@ -340,6 +340,8 @@ export default definePluginEntry({
     
     api.on('reply_dispatch', async (event, ctx) => {
       const identifier = getIdentifier(ctx);
+      api.logger.info(`[multi-message-mode] reply_dispatch identifier: ${identifier}`)
+      api.logger.info(`[multi-message-mode] reply_dispatch ctx: ${JSON.stringify(ctx, null, 2)}`)
       if (!identifier) {
         return undefined;
       }
