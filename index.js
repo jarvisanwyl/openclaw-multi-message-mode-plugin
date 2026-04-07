@@ -364,7 +364,7 @@ export default definePluginEntry({
         return undefined;
       }
       
-      const bodyForAgent = event.bodyForAgent || '';
+      const bodyForAgent = event.ctx.BodyForAgent || '';
       const isAudioMessage = bodyForAgent == '<media:audio>';
       api.logger.info(`[multi-message-mode] reply_dispatch bodyForAgent: ${bodyForAgent}`)
       api.logger.info(`[multi-message-mode] reply_dispatch isAudioMessage: ${isAudioMessage}`)
