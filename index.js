@@ -196,15 +196,8 @@ export default definePluginEntry({
     // Lets /mmc pass through to before_prompt_build
     // ========================================
     api.on('before_agent_reply', async (event, ctx) => {
-      const identifier = getIdentifier(ctx);
-      
-      if (!identifier) {
-        return undefined;
-      }
-      
-      const cleanedBody = event.cleanedBody || '';
-      api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody.length} chars, preview: ${cleanedBody.replace(/\\n/g, '\\\\n').slice(0, 60)}`);
-      const messageText = cleanedBody.trim();
+      api.logger.info(`[multi-message-mode] before_agent_reply event: ${JSON.stringify(event, null, 2)}`)
+      api.logger.info(`[multi-message-mode] before_agent_reply ctx: ${JSON.stringify(ctx, null, 2)}`)
 
       // // Check for pending audio from before_prompt_build
       // const pendingAudio = await readPendingAudio(identifier);
@@ -345,8 +338,8 @@ export default definePluginEntry({
     // Handles: stores pending audio path, deactivation, buffer injection
     // ========================================
     api.on('before_prompt_build', async (event, ctx) => {
-      const promptText = event.prompt || '';
-      api.logger.info(`[multi-message-mode] before_prompt_build prompt: ${promptText ? promptText.replace(/\\n/g, '\\\\n').slice(0, 500) : '(none)'}`);
+      api.logger.info(`[multi-message-mode] before_prompt_build event: ${JSON.stringify(event, null, 2)}`)
+      api.logger.info(`[multi-message-mode] before_prompt_build ctx: ${JSON.stringify(ctx, null, 2)}`)
       
       // const identifier = getIdentifier(ctx);
       // if (!identifier) {
