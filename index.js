@@ -156,6 +156,24 @@ const getIdentifier = (ctx) => {
   return null;
 };
 
+// Get identifier from sessionKey
+// sessionKey format: "agent:main:telegram:group:-1003690577722:topic:1867"
+// We want: "telegram:-1003690577722:topic:1867" (skip the chat type)
+const getSessionIdentifier = (sessionKey) => {
+  if (sessionKey) {
+    const match = sessionKey.match(/agent:\w+:(\w+):(?:group|user|channel):(.+)/);
+    if (match) {
+      return `${match[1]}:${match[2]}`;
+    }
+    // Fallback: try simpler pattern
+    const fallback = sessionKey.match(/agent:\w+:(.+)/);
+    if (fallback) {
+      return fallback[1].replace(/:(group|user|channel):/, ':');
+    }
+  }
+  return null;
+};
+
 export default definePluginEntry({
   id: 'multi-message-mode',
   name: 'Multi-Message Mode',
@@ -339,8 +357,9 @@ export default definePluginEntry({
     // ========================================
     
     api.on('reply_dispatch', async (event, ctx) => {
-      const identifier = getIdentifier(ctx);
+      const identifier = getSessionIdentifier(ctx.sessionKey);
       api.logger.info(`[multi-message-mode] reply_dispatch event: ${JSON.stringify(event, null, 2)}`)
+      api.logger.info(`[multi-message-mode] reply_dispatch identifier: ${JSON.stringify(event, null, 2)}`)
       if (!identifier) {
         return undefined;
       }
