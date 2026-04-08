@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry';
+import { transcribeFirstAudio } from 'openclaw/plugin-sdk/media-runtime';
 
 const BATCH_ROOT = '/tmp/openclaw/multi-message-mode/batch';
 
@@ -164,6 +165,35 @@ export default definePluginEntry({
         // Continue; buffer written, meta is secondary
       }
     };
+    
+    // ========================================
+    // reply_dispatch hook
+    // ========================================
+    
+    api.on('reply_dispatch', async (event, ctx) => {
+      const identifier = getSessionIdentifier(event.sessionKey);
+      api.logger.info(`[multi-message-mode] reply_dispatch event: ${JSON.stringify(event, null, 2)}`)
+      api.logger.info(`[multi-message-mode] reply_dispatch ctx: ${JSON.stringify(ctx, null, 2)}`)
+      api.logger.info(`[multi-message-mode] reply_dispatch identifier: ${identifier}`)
+      if (!identifier) {
+        return undefined;
+      }
+      
+      const bodyForAgent = event.ctx.BodyForAgent || '';
+      const isAudioMessage = bodyForAgent == '<media:audio>';
+      api.logger.info(`[multi-message-mode] reply_dispatch bodyForAgent: ${bodyForAgent}`)
+      api.logger.info(`[multi-message-mode] reply_dispatch isAudioMessage: ${isAudioMessage}`)
+      if (isAudioMessage) {
+        const audioPath = event.ctx.MediaPath || '';
+        api.logger.info(`[multi-message-mode] reply_dispatch audioPath: ${audioPath}`)
+        const ext = extname(audioPath);
+        const audioPathWithoutExt = audioPath.slice(0, -ext.length);
+        await writePendingAudio(identifier, audioPathWithoutExt);
+        api.logger.info(`[multi-message-mode] Storing pending audio path: ${audioPathWithoutExt}`)
+      }
+      api.logger.info(`[multi-message-mode] reply_dispatch event: ${JSON.stringify(event, null, 2)}`)
+    return undefined
+    }, { priority: 100 });
     
     // ========================================
     // before_agent_reply hook
