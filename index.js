@@ -216,7 +216,7 @@ export default definePluginEntry({
           });
           api.logger.info(`[multi-message-mode] reply_dispatch transcript: ${preflightTranscript}`)
         } catch (err) {
-          logVerbose(`telegram: audio preflight transcription failed: ${String(err)}`);
+          api.logger.info(`[multi-message-mode] reply_dispatch transcription error: ${String(err)}`)
         }
         
         // const audioPath = event.ctx.MediaPath || '';
@@ -226,7 +226,7 @@ export default definePluginEntry({
         // await writePendingAudio(identifier, audioPathWithoutExt);
         // api.logger.info(`[multi-message-mode] Storing pending audio path: ${audioPathWithoutExt}`)
       }
-      api.logger.info(`[multi-message-mode] reply_dispatch event: ${JSON.stringify(event, null, 2)}`)
+      // api.logger.info(`[multi-message-mode] reply_dispatch event: ${JSON.stringify(event, null, 2)}`)
     return undefined
     }, { priority: 100 });
     
