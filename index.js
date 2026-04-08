@@ -166,6 +166,21 @@ export default definePluginEntry({
       }
     };
     
+    const getSessionIdentifier = (sessionKey) => {
+      if (sessionKey) {
+        const match = sessionKey.match(/agent:\w+:(\w+):(?:group|user|channel):(.+)/);
+        if (match) {
+          return `${match[1]}:${match[2]}`;
+        }
+        // Fallback: try simpler pattern
+        const fallback = sessionKey.match(/agent:\w+:(.+)/);
+        if (fallback) {
+          return fallback[1].replace(/:(group|user|channel):/, ':');
+        }
+      }
+      return null;
+    };
+    
     // ========================================
     // reply_dispatch hook
     // ========================================
