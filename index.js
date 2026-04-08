@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry';
 import { transcribeFirstAudio } from 'openclaw/plugin-sdk/media-runtime';
+import { logVerbose } from "openclaw/plugin-sdk/runtime-env";
 
 const BATCH_ROOT = '/tmp/openclaw/multi-message-mode/batch';
 
@@ -204,7 +205,6 @@ export default definePluginEntry({
         const mediaTypes = event.ctx.MediaTypes;
         
         try {
-          const { transcribeFirstAudio } = await import("./media-understanding.runtime.js");
           const tempCtx = {
             MediaPaths: mediaPaths.length > 0 ? mediaPaths : undefined,
             MediaTypes: mediaTypes.length > 0 ? mediaTypes : undefined
