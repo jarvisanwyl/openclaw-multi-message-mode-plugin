@@ -211,7 +211,7 @@ export default definePluginEntry({
           };
           let preflightTranscript = await transcribeFirstAudio({
             ctx: tempCtx,
-            cfg: ctx.config,
+            cfg: ctx.cfg,
             agentDir: undefined,
           });
           api.logger.info(`[multi-message-mode] reply_dispatch transcript: ${preflightTranscript}`)
