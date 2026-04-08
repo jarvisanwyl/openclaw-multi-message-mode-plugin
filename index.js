@@ -173,8 +173,8 @@ export default definePluginEntry({
     api.on('reply_dispatch', async (event, ctx) => {
       const identifier = getSessionIdentifier(event.sessionKey);
       api.logger.info(`[multi-message-mode] reply_dispatch event: ${JSON.stringify(event, null, 2)}`)
-      api.logger.info(`[multi-message-mode] reply_dispatch ctx: ${JSON.stringify(ctx, null, 2)}`)
-      api.logger.info(`[multi-message-mode] reply_dispatch identifier: ${identifier}`)
+      // api.logger.info(`[multi-message-mode] reply_dispatch ctx: ${JSON.stringify(ctx, null, 2)}`)
+      // api.logger.info(`[multi-message-mode] reply_dispatch identifier: ${identifier}`)
       if (!identifier) {
         return undefined;
       }
@@ -184,12 +184,32 @@ export default definePluginEntry({
       api.logger.info(`[multi-message-mode] reply_dispatch bodyForAgent: ${bodyForAgent}`)
       api.logger.info(`[multi-message-mode] reply_dispatch isAudioMessage: ${isAudioMessage}`)
       if (isAudioMessage) {
-        const audioPath = event.ctx.MediaPath || '';
-        api.logger.info(`[multi-message-mode] reply_dispatch audioPath: ${audioPath}`)
-        const ext = extname(audioPath);
-        const audioPathWithoutExt = audioPath.slice(0, -ext.length);
-        await writePendingAudio(identifier, audioPathWithoutExt);
-        api.logger.info(`[multi-message-mode] Storing pending audio path: ${audioPathWithoutExt}`)
+        
+        const mediaPaths = event.ctx.MediaPaths;
+        const mediaTypes = event.ctx.MediaTypes;
+        
+        try {
+          const { transcribeFirstAudio } = await import("./media-understanding.runtime.js");
+          const tempCtx = {
+            MediaPaths: mediaPaths.length > 0 ? mediaPaths : undefined,
+            MediaTypes: mediaTypes.length > 0 ? mediaTypes : undefined
+          };
+          let preflightTranscript = await transcribeFirstAudio({
+            ctx: tempCtx,
+            cfg: ctx.config,
+            agentDir: undefined,
+          });
+          api.logger.info(`[multi-message-mode] reply_dispatch transcript: ${preflightTranscript}`)
+        } catch (err) {
+          logVerbose(`telegram: audio preflight transcription failed: ${String(err)}`);
+        }
+        
+        // const audioPath = event.ctx.MediaPath || '';
+        // api.logger.info(`[multi-message-mode] reply_dispatch audioPath: ${audioPath}`)
+        // const ext = extname(audioPath);
+        // const audioPathWithoutExt = audioPath.slice(0, -ext.length);
+        // await writePendingAudio(identifier, audioPathWithoutExt);
+        // api.logger.info(`[multi-message-mode] Storing pending audio path: ${audioPathWithoutExt}`)
       }
       api.logger.info(`[multi-message-mode] reply_dispatch event: ${JSON.stringify(event, null, 2)}`)
     return undefined
@@ -200,113 +220,113 @@ export default definePluginEntry({
     // Handles: /mmm, /mmm-cancel, buffering, blocking
     // Lets /mmc pass through to before_prompt_build
     // ========================================
-    api.on('before_agent_reply', async (event, ctx) => {
-      api.logger.info(`[multi-message-mode] before_agent_reply event: ${JSON.stringify(event, null, 2)}`)
-      api.logger.info(`[multi-message-mode] before_agent_reply ctx: ${JSON.stringify(ctx, null, 2)}`)
-      const identifier = getIdentifier(ctx);
+    // api.on('before_agent_reply', async (event, ctx) => {
+    //   api.logger.info(`[multi-message-mode] before_agent_reply event: ${JSON.stringify(event, null, 2)}`)
+    //   api.logger.info(`[multi-message-mode] before_agent_reply ctx: ${JSON.stringify(ctx, null, 2)}`)
+    //   const identifier = getIdentifier(ctx);
       
-      if (!identifier) {
-        return undefined;
-      }
+    //   if (!identifier) {
+    //     return undefined;
+    //   }
       
-      const cleanedBody = event.cleanedBody || '';
-      const messageText = cleanedBody.trim();
+    //   const cleanedBody = event.cleanedBody || '';
+    //   const messageText = cleanedBody.trim();
 
-      // Activation: /mmm or voice "multi-message mode"
-      if (isActivationRequest(cleanedBody)) {
-        api.logger.info(`[multi-message-mode] Activate command for ${identifier}`);
-        const active = await isBatchActive(identifier);
-        if (active) {
-          return { handled: true, reply: { text: 'Multi-message mode already active.' } };
-        }
-        await activateBatch(identifier);
-        return { handled: true, reply: { text: 'Multi-message mode activated. Send messages, then /mmc to release.' } };
-      }
+    //   // Activation: /mmm or voice "multi-message mode"
+    //   if (isActivationRequest(cleanedBody)) {
+    //     api.logger.info(`[multi-message-mode] Activate command for ${identifier}`);
+    //     const active = await isBatchActive(identifier);
+    //     if (active) {
+    //       return { handled: true, reply: { text: 'Multi-message mode already active.' } };
+    //     }
+    //     await activateBatch(identifier);
+    //     return { handled: true, reply: { text: 'Multi-message mode activated. Send messages, then /mmc to release.' } };
+    //   }
       
-      // Cancel: /mmm-cancel only (no voice equivalent)
-      if (isCancelRequest(cleanedBody)) {
-        api.logger.info(`[multi-message-mode] Cancel command for ${identifier}`);
-        const active = await isBatchActive(identifier);
-        if (!active) {
-          return { handled: true, reply: { text: 'No active multi-message batch.' } };
-        }
-        await cancelBatch(identifier);
-        return { handled: true, reply: { text: 'Multi-message mode cancelled.' } };
-      }
+    //   // Cancel: /mmm-cancel only (no voice equivalent)
+    //   if (isCancelRequest(cleanedBody)) {
+    //     api.logger.info(`[multi-message-mode] Cancel command for ${identifier}`);
+    //     const active = await isBatchActive(identifier);
+    //     if (!active) {
+    //       return { handled: true, reply: { text: 'No active multi-message batch.' } };
+    //     }
+    //     await cancelBatch(identifier);
+    //     return { handled: true, reply: { text: 'Multi-message mode cancelled.' } };
+    //   }
       
-      // Deactivation: /mmc or voice "multi-message complete"
-      // Let through to before_prompt_build
-      if (isDeactivationRequest(cleanedBody)) {
-        const active = await isBatchActive(identifier);
-        if (active) {
-          api.logger.info(`[multi-message-mode] /mmc received, deactivating for ${identifier}`);
-          await deactivateBatch(identifier);
-        }
-        return undefined; // Let through to before_prompt_build
-      }
+    //   // Deactivation: /mmc or voice "multi-message complete"
+    //   // Let through to before_prompt_build
+    //   if (isDeactivationRequest(cleanedBody)) {
+    //     const active = await isBatchActive(identifier);
+    //     if (active) {
+    //       api.logger.info(`[multi-message-mode] /mmc received, deactivating for ${identifier}`);
+    //       await deactivateBatch(identifier);
+    //     }
+    //     return undefined; // Let through to before_prompt_build
+    //   }
       
-      // Message buffering (when batch is active)
-      const active = await isBatchActive(identifier);
-      if (!active) {
-        return undefined; // Let agent process normally
-      }
+    //   // Message buffering (when batch is active)
+    //   const active = await isBatchActive(identifier);
+    //   if (!active) {
+    //     return undefined; // Let agent process normally
+    //   }
       
-      // Batch is active - buffer transcript and cancel agent turn
-      if (messageText) {
-        let content = messageText;
-        // If it's a voice message, extract just the transcript
-        const transcript = extractTranscript(cleanedBody);
-        if (transcript !== null) {
-          content = transcript;
-        }
-        await appendToBuffer(identifier, content);
-      }
+    //   // Batch is active - buffer transcript and cancel agent turn
+    //   if (messageText) {
+    //     let content = messageText;
+    //     // If it's a voice message, extract just the transcript
+    //     const transcript = extractTranscript(cleanedBody);
+    //     if (transcript !== null) {
+    //       content = transcript;
+    //     }
+    //     await appendToBuffer(identifier, content);
+    //   }
       
-      return { handled: true, reply: { text: 'Message buffered.' } }; // Cancel agent turn and reply.
-    }, { priority: 100 });
+    //   return { handled: true, reply: { text: 'Message buffered.' } }; // Cancel agent turn and reply.
+    // }, { priority: 100 });
     
     // ========================================
     // before_prompt_build hook
     // Handles: /mmc - injects buffered content into LLM input
     // ========================================
-    api.on('before_prompt_build', async (event, ctx) => {
-      // Check if prompt is a deactivation request (/mmc or voice "multi-message complete")
-      const promptText = event.prompt || '';
-      const isDeactivation = promptText.includes('/mmc') || isDeactivationRequest(promptText);
+    // api.on('before_prompt_build', async (event, ctx) => {
+    //   // Check if prompt is a deactivation request (/mmc or voice "multi-message complete")
+    //   const promptText = event.prompt || '';
+    //   const isDeactivation = promptText.includes('/mmc') || isDeactivationRequest(promptText);
       
-      if (!isDeactivation) {
-        return undefined;
-      }
+    //   if (!isDeactivation) {
+    //     return undefined;
+    //   }
       
-      const identifier = getIdentifier(ctx);
+    //   const identifier = getIdentifier(ctx);
       
-      if (!identifier) {
-        return undefined;
-      }
+    //   if (!identifier) {
+    //     return undefined;
+    //   }
       
-      // Read the buffer
-      const dir = getBatchDir(identifier);
-      let bufferContent = '';
-      try {
-        bufferContent = await fs.readFile(join(dir, 'buffer.txt'), 'utf8');
-      } catch (err) {}
+    //   // Read the buffer
+    //   const dir = getBatchDir(identifier);
+    //   let bufferContent = '';
+    //   try {
+    //     bufferContent = await fs.readFile(join(dir, 'buffer.txt'), 'utf8');
+    //   } catch (err) {}
 
-      if (!bufferContent.trim()) {
-        return { prependContext: 'The user released a multi-message batch, but no messages were buffered.' };
-      }
+    //   if (!bufferContent.trim()) {
+    //     return { prependContext: 'The user released a multi-message batch, but no messages were buffered.' };
+    //   }
 
-      // Clean up the batch directory (delete buffer files)
-      try {
-        await cancelBatch(identifier);
-      } catch (err) {
-        api.logger.warn(`[multi-message-mode] Failed to clean up batch for ${identifier}: ${err.message}`);
-      }
+    //   // Clean up the batch directory (delete buffer files)
+    //   try {
+    //     await cancelBatch(identifier);
+    //   } catch (err) {
+    //     api.logger.warn(`[multi-message-mode] Failed to clean up batch for ${identifier}: ${err.message}`);
+    //   }
 
-      // Inject buffer content via prependContext
-      api.logger.info(`[multi-message-mode] Injecting ${bufferContent.length} chars via prependContext`);
-      return { 
-        prependContext: `The user has collected the following messages via multi-message mode. Process them as a single request:\n---\n${bufferContent}---\n\n`
-      };
-    }, { priority: 100 });
+    //   // Inject buffer content via prependContext
+    //   api.logger.info(`[multi-message-mode] Injecting ${bufferContent.length} chars via prependContext`);
+    //   return { 
+    //     prependContext: `The user has collected the following messages via multi-message mode. Process them as a single request:\n---\n${bufferContent}---\n\n`
+    //   };
+    // }, { priority: 100 });
   }
 });
