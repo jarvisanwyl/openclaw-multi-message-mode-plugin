@@ -241,7 +241,6 @@ export default definePluginEntry({
         
 
       }
-      // api.logger.info(`[multi-message-mode] reply_dispatch event: ${JSON.stringify(event, null, 2)}`)
     return undefined
     }, { priority: 100 });
     
