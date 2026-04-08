@@ -185,7 +185,7 @@ export default definePluginEntry({
     // llm_input hook
     // ========================================
     
-    api.on('reply_dispatch', async (event, ctx) => {
+    api.on('llm_input', async (event, ctx) => {
       // api.logger.info(`[multi-message-mode] llm_input ctx: ${JSON.stringify(ctx, null, 2)}`)
       api.logger.info(`[multi-message-mode] llm_input event: ${JSON.stringify(event, null, 2)}`)
       
