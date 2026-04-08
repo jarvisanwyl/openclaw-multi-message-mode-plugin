@@ -182,67 +182,76 @@ export default definePluginEntry({
     };
     
     // ========================================
-    // reply_dispatch hook
+    // llm_input hook
     // ========================================
     
     api.on('reply_dispatch', async (event, ctx) => {
-      const identifier = getSessionIdentifier(event.sessionKey);
-      api.logger.info(`[multi-message-mode] reply_dispatch event: ${JSON.stringify(event, null, 2)}`)
-      // api.logger.info(`[multi-message-mode] reply_dispatch ctx: ${JSON.stringify(ctx, null, 2)}`)
-      // api.logger.info(`[multi-message-mode] reply_dispatch identifier: ${identifier}`)
-      if (!identifier) {
-        return undefined;
-      }
+      api.logger.info(`[multi-message-mode] llm_input ctx: ${JSON.stringify(ctx, null, 2)}`)
+      api.logger.info(`[multi-message-mode] llm_input event: ${JSON.stringify(event, null, 2)}`)
+    }, { priority: 100 });
+    
+    // ========================================
+    // reply_dispatch hook
+    // ========================================
+    
+    // api.on('reply_dispatch', async (event, ctx) => {
+    //   const identifier = getSessionIdentifier(event.sessionKey);
+    //   api.logger.info(`[multi-message-mode] reply_dispatch event: ${JSON.stringify(event, null, 2)}`)
+    //   // api.logger.info(`[multi-message-mode] reply_dispatch ctx: ${JSON.stringify(ctx, null, 2)}`)
+    //   // api.logger.info(`[multi-message-mode] reply_dispatch identifier: ${identifier}`)
+    //   if (!identifier) {
+    //     return undefined;
+    //   }
       
-      const bodyForAgent = event.ctx.BodyForAgent || '';
-      const isAudioMessage = bodyForAgent == '<media:audio>';
-      api.logger.info(`[multi-message-mode] reply_dispatch bodyForAgent: ${bodyForAgent}`)
-      api.logger.info(`[multi-message-mode] reply_dispatch isAudioMessage: ${isAudioMessage}`)
-      if (isAudioMessage) {
+    //   const bodyForAgent = event.ctx.BodyForAgent || '';
+    //   const isAudioMessage = bodyForAgent == '<media:audio>';
+    //   api.logger.info(`[multi-message-mode] reply_dispatch bodyForAgent: ${bodyForAgent}`)
+    //   api.logger.info(`[multi-message-mode] reply_dispatch isAudioMessage: ${isAudioMessage}`)
+    //   if (isAudioMessage) {
         
-        const mediaPaths = event.ctx.MediaPaths;
-        const mediaTypes = event.ctx.MediaTypes;
+    //     const mediaPaths = event.ctx.MediaPaths;
+    //     const mediaTypes = event.ctx.MediaTypes;
         
-        api.logger.info(`[multi-message-mode] reply_dispatch ctx.cfg: ${JSON.stringify(ctx.cfg)}`);
-        api.logger.info(`[multi-message-mode] reply_dispatch mediaPaths: ${JSON.stringify(mediaPaths)}`);
-        api.logger.info(`[multi-message-mode] reply_dispatch mediaTypes: ${JSON.stringify(mediaTypes)}`);
+    //     api.logger.info(`[multi-message-mode] reply_dispatch ctx.cfg: ${JSON.stringify(ctx.cfg)}`);
+    //     api.logger.info(`[multi-message-mode] reply_dispatch mediaPaths: ${JSON.stringify(mediaPaths)}`);
+    //     api.logger.info(`[multi-message-mode] reply_dispatch mediaTypes: ${JSON.stringify(mediaTypes)}`);
         
-        try {
-          const tempCtx = {
-            MediaPaths: mediaPaths.length > 0 ? mediaPaths : undefined,
-            MediaTypes: mediaTypes.length > 0 ? mediaTypes : undefined
-          };
-          let preflightTranscript = await transcribeFirstAudio({
-            ctx: tempCtx,
-            cfg: ctx.cfg,
-            agentDir: undefined,
-          });
-          api.logger.info(`[multi-message-mode] reply_dispatch transcript: ${preflightTranscript}`)
+    //     try {
+    //       const tempCtx = {
+    //         MediaPaths: mediaPaths.length > 0 ? mediaPaths : undefined,
+    //         MediaTypes: mediaTypes.length > 0 ? mediaTypes : undefined
+    //       };
+    //       let preflightTranscript = await transcribeFirstAudio({
+    //         ctx: tempCtx,
+    //         cfg: ctx.cfg,
+    //         agentDir: undefined,
+    //       });
+    //       api.logger.info(`[multi-message-mode] reply_dispatch transcript: ${preflightTranscript}`)
           
-          const audioPath = event.ctx.MediaPath || '';
-          api.logger.info(`[multi-message-mode] reply_dispatch audioPath: ${audioPath}`)
-          const ext = extname(audioPath);
-          const audioPathWithoutExt = audioPath.slice(0, -ext.length);
-          const transcriptPath = audioPathWithoutExt + '.txt'
-          try {
-            const transcript = await fs.readFile(transcriptPath, 'utf8');
-            api.logger.info(`[multi-message-mode] reply_dispatch Transcript: ${transcript}`);
-          } catch (err) {
-            if (err.code === "ENOENT") {
-              api.logger.info(`[multi-message-mode] reply_dispatch Transcript file ${transcriptPath} does not exist`);
-            } else {
-              throw err;
-            }
-          }
+    //       const audioPath = event.ctx.MediaPath || '';
+    //       api.logger.info(`[multi-message-mode] reply_dispatch audioPath: ${audioPath}`)
+    //       const ext = extname(audioPath);
+    //       const audioPathWithoutExt = audioPath.slice(0, -ext.length);
+    //       const transcriptPath = audioPathWithoutExt + '.txt'
+    //       try {
+    //         const transcript = await fs.readFile(transcriptPath, 'utf8');
+    //         api.logger.info(`[multi-message-mode] reply_dispatch Transcript: ${transcript}`);
+    //       } catch (err) {
+    //         if (err.code === "ENOENT") {
+    //           api.logger.info(`[multi-message-mode] reply_dispatch Transcript file ${transcriptPath} does not exist`);
+    //         } else {
+    //           throw err;
+    //         }
+    //       }
           
-        } catch (err) {
-          api.logger.info(`[multi-message-mode] reply_dispatch transcription error: ${String(err)}`)
-        }
+    //     } catch (err) {
+    //       api.logger.info(`[multi-message-mode] reply_dispatch transcription error: ${String(err)}`)
+    //     }
         
 
-      }
-    return undefined
-    }, { priority: 100 });
+    //   }
+    // return undefined
+    // }, { priority: 100 });
     
     // ========================================
     // before_agent_reply hook
