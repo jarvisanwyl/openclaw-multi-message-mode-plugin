@@ -186,38 +186,38 @@ export default definePluginEntry({
     // ========================================
     
     api.on('llm_input', async (event, ctx) => {
-      // api.logger.info(`[multi-message-mode] llm_input ctx: ${JSON.stringify(ctx, null, 2)}`)
+      api.logger.info(`[multi-message-mode] llm_input ctx: ${JSON.stringify(ctx, null, 2)}`)
       api.logger.info(`[multi-message-mode] llm_input event: ${JSON.stringify(event, null, 2)}`)
       
-      const bodyForAgent = event.ctx.BodyForAgent || '';
-      const isAudioMessage = (bodyForAgent == '<media:audio>' && event.inboundAudio);
-      api.logger.info(`[multi-message-mode] reply_dispatch bodyForAgent: ${bodyForAgent}`)
-      api.logger.info(`[multi-message-mode] reply_dispatch isAudioMessage: ${isAudioMessage}`)
-      if (isAudioMessage) {
+      // const bodyForAgent = event.ctx.BodyForAgent || '';
+      // const isAudioMessage = (bodyForAgent == '<media:audio>' && event.inboundAudio);
+      // api.logger.info(`[multi-message-mode] reply_dispatch bodyForAgent: ${bodyForAgent}`)
+      // api.logger.info(`[multi-message-mode] reply_dispatch isAudioMessage: ${isAudioMessage}`)
+      // if (isAudioMessage) {
         
-        const mediaPaths = event.ctx.MediaPaths;
-        const mediaTypes = event.ctx.MediaTypes;
+      //   const mediaPaths = event.ctx.MediaPaths;
+      //   const mediaTypes = event.ctx.MediaTypes;
         
-        api.logger.info(`[multi-message-mode] reply_dispatch ctx.cfg: ${JSON.stringify(ctx.cfg)}`);
-        api.logger.info(`[multi-message-mode] reply_dispatch mediaPaths: ${JSON.stringify(mediaPaths)}`);
-        api.logger.info(`[multi-message-mode] reply_dispatch mediaTypes: ${JSON.stringify(mediaTypes)}`);
+      //   api.logger.info(`[multi-message-mode] reply_dispatch ctx.cfg: ${JSON.stringify(ctx.cfg)}`);
+      //   api.logger.info(`[multi-message-mode] reply_dispatch mediaPaths: ${JSON.stringify(mediaPaths)}`);
+      //   api.logger.info(`[multi-message-mode] reply_dispatch mediaTypes: ${JSON.stringify(mediaTypes)}`);
         
-        const audioPath = event.ctx.MediaPath || '';
-          api.logger.info(`[multi-message-mode] reply_dispatch audioPath: ${audioPath}`)
-          const ext = extname(audioPath);
-          const audioPathWithoutExt = audioPath.slice(0, -ext.length);
-          const transcriptPath = audioPathWithoutExt + '.txt'
-          try {
-            const transcript = await fs.readFile(transcriptPath, 'utf8');
-            api.logger.info(`[multi-message-mode] reply_dispatch Transcript: ${transcript}`);
-          } catch (err) {
-            if (err.code === "ENOENT") {
-              api.logger.info(`[multi-message-mode] reply_dispatch Transcript file ${transcriptPath} does not exist`);
-            } else {
-              throw err;
-            }
-          }
-      }
+      //   const audioPath = event.ctx.MediaPath || '';
+      //     api.logger.info(`[multi-message-mode] reply_dispatch audioPath: ${audioPath}`)
+      //     const ext = extname(audioPath);
+      //     const audioPathWithoutExt = audioPath.slice(0, -ext.length);
+      //     const transcriptPath = audioPathWithoutExt + '.txt'
+      //     try {
+      //       const transcript = await fs.readFile(transcriptPath, 'utf8');
+      //       api.logger.info(`[multi-message-mode] reply_dispatch Transcript: ${transcript}`);
+      //     } catch (err) {
+      //       if (err.code === "ENOENT") {
+      //         api.logger.info(`[multi-message-mode] reply_dispatch Transcript file ${transcriptPath} does not exist`);
+      //       } else {
+      //         throw err;
+      //       }
+      //     }
+      // }
     }, { priority: 100 });
     
     // ========================================
