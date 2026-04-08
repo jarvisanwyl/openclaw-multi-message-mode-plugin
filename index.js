@@ -367,7 +367,7 @@ export default definePluginEntry({
     api.on('reply_dispatch', async (event, ctx) => {
       const identifier = getSessionIdentifier(event.sessionKey);
       api.logger.info(`[multi-message-mode] reply_dispatch event: ${JSON.stringify(event, null, 2)}`)
-      api.logger.info(`[multi-message-mode] reply_dispatch ctx: ${ctx}`)
+      api.logger.info(`[multi-message-mode] reply_dispatch ctx: ${JSON.stringify(ctx, null, 2)}`)
       api.logger.info(`[multi-message-mode] reply_dispatch identifier: ${identifier}`)
       if (!identifier) {
         return undefined;
