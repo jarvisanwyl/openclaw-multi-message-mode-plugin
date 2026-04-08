@@ -203,6 +203,10 @@ export default definePluginEntry({
         const mediaPaths = event.ctx.MediaPaths;
         const mediaTypes = event.ctx.MediaTypes;
         
+        api.logger.info(`[multi-message-mode] reply_dispatch ctx.cfg: ${JSON.stringify(ctx.cfg)}`);
+        api.logger.info(`[multi-message-mode] reply_dispatch mediaPaths: ${JSON.stringify(mediaPaths)}`);
+        api.logger.info(`[multi-message-mode] reply_dispatch mediaTypes: ${JSON.stringify(mediaTypes)}`);
+        
         try {
           const tempCtx = {
             MediaPaths: mediaPaths.length > 0 ? mediaPaths : undefined,
@@ -222,10 +226,10 @@ export default definePluginEntry({
           const transcriptPath = audioPathWithoutExt + '.txt'
           try {
             const transcript = await fs.readFile(transcriptPath, 'utf8');
-            api.logger.info(`[multi-message-mode] before_prompt_build Transcript: ${transcript}`);
+            api.logger.info(`[multi-message-mode] reply_dispatch Transcript: ${transcript}`);
           } catch (err) {
             if (err.code === "ENOENT") {
-              api.logger.info(`[multi-message-mode] before_prompt_build Transcript file ${transcriptPath} does not exist`);
+              api.logger.info(`[multi-message-mode] reply_dispatch Transcript file ${transcriptPath} does not exist`);
             } else {
               throw err;
             }
