@@ -1,8 +1,7 @@
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { join, extname } from 'path';
 import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry';
 import { transcribeFirstAudio } from 'openclaw/plugin-sdk/media-runtime';
-import { logVerbose } from "openclaw/plugin-sdk/runtime-env";
 
 const BATCH_ROOT = '/tmp/openclaw/multi-message-mode/batch';
 
@@ -215,16 +214,28 @@ export default definePluginEntry({
             agentDir: undefined,
           });
           api.logger.info(`[multi-message-mode] reply_dispatch transcript: ${preflightTranscript}`)
+          
+          const audioPath = event.ctx.MediaPath || '';
+          api.logger.info(`[multi-message-mode] reply_dispatch audioPath: ${audioPath}`)
+          const ext = extname(audioPath);
+          const audioPathWithoutExt = audioPath.slice(0, -ext.length);
+          const transcriptPath = audioPathWithoutExt + '.txt'
+          try {
+            const transcript = await fs.readFile(transcriptPath, 'utf8');
+            api.logger.info(`[multi-message-mode] before_prompt_build Transcript: ${transcript}`);
+          } catch (err) {
+            if (err.code === "ENOENT") {
+              api.logger.info(`[multi-message-mode] before_prompt_build Transcript file ${transcriptPath} does not exist`);
+            } else {
+              throw err;
+            }
+          }
+          
         } catch (err) {
           api.logger.info(`[multi-message-mode] reply_dispatch transcription error: ${String(err)}`)
         }
         
-        // const audioPath = event.ctx.MediaPath || '';
-        // api.logger.info(`[multi-message-mode] reply_dispatch audioPath: ${audioPath}`)
-        // const ext = extname(audioPath);
-        // const audioPathWithoutExt = audioPath.slice(0, -ext.length);
-        // await writePendingAudio(identifier, audioPathWithoutExt);
-        // api.logger.info(`[multi-message-mode] Storing pending audio path: ${audioPathWithoutExt}`)
+
       }
       // api.logger.info(`[multi-message-mode] reply_dispatch event: ${JSON.stringify(event, null, 2)}`)
     return undefined
