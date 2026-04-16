@@ -67,7 +67,8 @@ const cancelBatch = async (identifier) => {
 // Extract transcript from voice message cleanedBody
 // Format: "[Audio]\nUser text:\n... Transcript:\nMulti-message mode."
 const extractTranscript = (cleanedBody) => {
-  if (!cleanedBody.includes('<media:audio>') || !cleanedBody.includes('Transcript:')) {
+  const isAudio = cleanedBody.includes('<media:audio>') || cleanedBody.includes('[Audio]');
+  if (!isAudio || !cleanedBody.includes('Transcript:')) {
     return null;
   }
   const match = cleanedBody.match(/Transcript:\n(.+?)(?:\n---|$)/s);
