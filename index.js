@@ -110,7 +110,7 @@ export default definePluginEntry({
     
     // Check if cleanedBody is an activation request (/mmm or voice "multi-message mode")
     const isActivationRequest = (cleanedBody, cfg = {}) => {
-      api.logger.info(`[multi-message-mode] cfg: ${json.stringify(cfg, null, 2)}`);
+      api.logger.info(`[multi-message-mode] cfg: ${JSON.stringify(cfg, null, 2)}`);
       const slashCommands = cfg?.slashCommands ?? {};
       const voiceKeywords = cfg?.voiceKeywords ?? {};
       const mmmSlash = slashCommands.mmm ?? '/mmm';
