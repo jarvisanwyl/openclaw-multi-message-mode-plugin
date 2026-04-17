@@ -4,6 +4,24 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "slashCommands": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mmm": { "type": "string", "default": "/mmm" },
+          "mmc": { "type": "string", "default": "/mmc" },
+          "mmmCancel": { "type": "string", "default": "/mmm-cancel" }
+        }
+      },
+      "voiceKeywords": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "activate": { "type": "string", "default": "multi-message mode" },
+          "deactivate": { "type": "string", "default": "multi-message complete" }
+        }
+      }
+    }
   }
 }

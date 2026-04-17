@@ -6,6 +6,54 @@ The **Multi‑Message Mode** plugin buffers multiple incoming messages and relea
 
 The plugin intercepts inbound messages via the OpenClaw `before_agent_reply` hook, stores them in a session‑scoped buffer, and blocks them from reaching the agent. When the batch is complete, the buffer is injected into the LLM prompt via the `before_prompt_build` hook, allowing the agent to process all accumulated messages as a single request.
 
+## Configuration
+
+The plugin's slash commands and voice‑transcript keywords can be customized via OpenClaw's plugin configuration system. The default values are those listed in the tables below.
+
+### Configurable Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `slashCommands.mmm` | string | `/mmm` | Slash command to activate multi‑message mode |
+| `slashCommands.mmc` | string | `/mmc` | Slash command to deactivate multi‑message mode |
+| `slashCommands.mmmCancel` | string | `/mmm‑cancel` | Slash command to cancel batch and discard buffer |
+| `voiceKeywords.activate` | string | `multi‑message mode` | Spoken phrase (transcript) that activates batch mode |
+| `voiceKeywords.deactivate` | string | `multi‑message complete` | Spoken phrase that deactivates batch mode |
+
+### Configuration Example
+
+Add the following to your `openclaw.json` under `"plugins": { "multi‑message‑mode": { ... } }`:
+
+```json
+{
+  "plugins": {
+    "multi‑message‑mode": {
+      "slashCommands": {
+        "mmm": "/batch",
+        "mmc": "/release",
+        "mmmCancel": "/batch‑cancel"
+      },
+      "voiceKeywords": {
+        "activate": "start batching",
+        "deactivate": "finish batching"
+      }
+    }
+  }
+}
+```
+
+### Reading Configuration in Plugin Code
+
+The plugin receives its configuration via the `ctx.cfg` object in hook handlers. For example:
+
+```javascript
+const mmmSlash = ctx.cfg?.slashCommands?.mmm ?? '/mmm';
+const voiceActivate = ctx.cfg?.voiceKeywords?.activate ?? 'multi-message mode';
+const voiceDeactivate = ctx.cfg?.voiceKeywords?.deactivate ?? 'multi-message complete';
+```
+
+Configuration is optional; missing keys fall back to defaults.
+
 ## Activation & Deactivation
 
 ### 1. Slash‑command triggers (fast typing)
@@ -16,12 +64,16 @@ The plugin intercepts inbound messages via the OpenClaw `before_agent_reply` hoo
 | `/mmc`  | Multi‑Message Complete | Deactivate batch mode |
 | `/mmm‑cancel` | Cancel batch | Discard buffer and deactivate |
 
+*These are the default commands; they can be configured via plugin settings.*
+
 ### 2. Voice‑transcript triggers
 
 | Spoken phrase | Meaning | Detection logic |
 |---------------|---------|-----------------|
 | `multi‑message mode`   | Activate batch mode | See “Voice detection” below |
 | `multi‑message complete` | Deactivate batch mode | See “Voice detection” below |
+
+*These are the default phrases; they can be configured via plugin settings.*
 
 **Note:** Voice cancellation (`multi‑message cancel`) is not implemented; use `/mmm‑cancel`.
 
@@ -35,6 +87,8 @@ User text:
 Multi‑message mode.
 ```
 
+*Note:* The phrases `Multi‑message mode` and `Multi‑message complete` are the **default** activation/deactivation keywords; they can be customized via the plugin’s `voiceKeywords` configuration (see [Configuration](#configuration)).
+
 Detection steps:
 1. **Extract transcript**: Look for `<media:audio>` and `Transcript:` markers; capture the line after `Transcript:`.
 2. **Length filter**: If the extracted transcript exceeds 30 characters, treat as normal content (skip keyword detection).
@@ -46,6 +100,8 @@ Detection steps:
    - If the normalized string equals `multimessagecomplete` → **deactivation**.
    - Otherwise, treat as normal content.
 
+   *These are the default normalized keywords; they correspond to the configured `voiceKeywords.activate` and `voiceKeywords.deactivate` settings.*
+
 **Examples**:
 - `"Multi‑message mode!"` → `multimessagemode` → activate
 - `"Multi‑message complete."` → `multimessagecomplete` → deactivate
@@ -55,10 +111,12 @@ Detection steps:
 ## Behavior
 
 ### Activation (`/mmm` or voice `multi‑message mode`)
+
+*These are the default triggers; both slash command and voice keyword can be customized via plugin configuration.*
 1. Create a batch‑state directory for the session (`/tmp/openclaw/multi‑message‑mode/batch/<normalized‑session‑id>/`).
 2. Write an `active` flag file.
 3. Create empty `buffer.txt` and `meta.json` files.
-4. Reply with a short confirmation (“Multi‑message mode activated. Send messages, then /mmc to release.”).
+4. Reply with a short confirmation (“Multi‑message mode activated. Send messages, then /mmc to release.”). *The slash command `/mmc` is the default; it can be changed via configuration.*
 5. **All subsequent messages are blocked** (see “Buffering”).
 
 ### Buffering (while active)
@@ -69,14 +127,18 @@ Detection steps:
 3. Voice messages are stripped of their surrounding metadata; only the transcript line is stored.
 
 ### Deactivation (`/mmc` or voice `multi‑message complete`)
+
+*These are the default triggers; both slash command and voice keyword can be customized via plugin configuration.*
 1. Remove the `active` flag file (keep the buffer on disk).
 2. **Let the deactivation message pass through** to `before_prompt_build`.
 3. In `before_prompt_build`, read `buffer.txt`, delete the entire batch directory, and inject the buffer content into the LLM prompt via `prependContext`.
 4. The agent receives a single prefixed context block containing all buffered messages in chronological order.
 
 ### Cancellation (`/mmm‑cancel`)
+
+*This is the default slash command; it can be customized via plugin configuration.*
 1. Delete the entire batch directory, discarding any buffered content.
-2. Reply with “Multi‑message mode cancelled.”
+2. Reply with “Multi‑message mode cancelled.” *The slash command `/mmm‑cancel` is the default; it can be changed via configuration.*
 
 ## State & Persistence
 
@@ -107,6 +169,7 @@ Detection steps:
 ## Implementation Status
 
 ✅ All detection logic implemented (`extractTranscript`, `normalizeText`, `isActivationRequest`, `isDeactivationRequest`, `isCancelRequest`)
+✅ Configuration support (slash commands and voice keywords customizable via plugin config)
 ✅ File‑system operations (`activateBatch`, `appendToBuffer`, `deactivateBatch`, `cancelBatch`)
 ✅ Voice‑activation working with Telegram audio transcripts
 ✅ Ordering preserved, clean‑up after injection
@@ -114,5 +177,5 @@ Detection steps:
 
 ---
 
-*Last updated: 2026‑04‑05*  
+*Last updated: 2026‑04‑17*  
 *Plugin ID: `multi‑message‑mode`*

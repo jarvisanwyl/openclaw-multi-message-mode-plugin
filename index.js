@@ -81,9 +81,13 @@ const normalizeText = (text) => {
 };
 
 // Check if cleanedBody is an activation request (/mmm or voice "multi-message mode")
-const isActivationRequest = (cleanedBody) => {
+const isActivationRequest = (cleanedBody, cfg = {}) => {
+  const slashCommands = cfg?.slashCommands ?? {};
+  const voiceKeywords = cfg?.voiceKeywords ?? {};
+  const mmmSlash = slashCommands.mmm ?? '/mmm';
+  const voiceActivate = voiceKeywords.activate ?? 'multi-message mode';
   const trimmed = cleanedBody.trim();
-  if (trimmed === '/mmm') {
+  if (trimmed === mmmSlash) {
     return true;
   }
   const transcript = extractTranscript(cleanedBody);
@@ -91,13 +95,18 @@ const isActivationRequest = (cleanedBody) => {
     return false; // Too long, treat as normal content
   }
   const normalized = normalizeText(transcript);
-  return normalized === 'multimessagemode';
+  const normalizedKeyword = normalizeText(voiceActivate);
+  return normalized === normalizedKeyword;
 };
 
 // Check if cleanedBody is a deactivation request (/mmc or voice "multi-message complete")
-const isDeactivationRequest = (cleanedBody) => {
+const isDeactivationRequest = (cleanedBody, cfg = {}) => {
+  const slashCommands = cfg?.slashCommands ?? {};
+  const voiceKeywords = cfg?.voiceKeywords ?? {};
+  const mmcSlash = slashCommands.mmc ?? '/mmc';
+  const voiceDeactivate = voiceKeywords.deactivate ?? 'multi-message complete';
   const trimmed = cleanedBody.trim();
-  if (trimmed === '/mmc') {
+  if (trimmed === mmcSlash) {
     return true;
   }
   const transcript = extractTranscript(cleanedBody);
@@ -105,13 +114,16 @@ const isDeactivationRequest = (cleanedBody) => {
     return false;
   }
   const normalized = normalizeText(transcript);
-  return normalized === 'multimessagecomplete';
+  const normalizedKeyword = normalizeText(voiceDeactivate);
+  return normalized === normalizedKeyword;
 };
 
 // Check if cleanedBody is a cancel request (/mmm-cancel)
-const isCancelRequest = (cleanedBody) => {
+const isCancelRequest = (cleanedBody, cfg = {}) => {
+  const slashCommands = cfg?.slashCommands ?? {};
+  const mmmCancelSlash = slashCommands.mmmCancel ?? '/mmm-cancel';
   const trimmed = cleanedBody.trim();
-  return trimmed === '/mmm-cancel';
+  return trimmed === mmmCancelSlash;
 };
 
 // Get identifier from sessionKey
@@ -288,113 +300,124 @@ export default definePluginEntry({
     // Handles: /mmm, /mmm-cancel, buffering, blocking
     // Lets /mmc pass through to before_prompt_build
     // ========================================
-    // api.on('before_agent_reply', async (event, ctx) => {
-    //   api.logger.info(`[multi-message-mode] before_agent_reply event: ${JSON.stringify(event, null, 2)}`)
-    //   api.logger.info(`[multi-message-mode] before_agent_reply ctx: ${JSON.stringify(ctx, null, 2)}`)
-    //   const identifier = getIdentifier(ctx);
-      
-    //   if (!identifier) {
-    //     return undefined;
-    //   }
-      
-    //   const cleanedBody = event.cleanedBody || '';
-    //   const messageText = cleanedBody.trim();
+    api.on('before_agent_reply', async (event, ctx) => {
+      api.logger.info(`[multi-message-mode] before_agent_reply event: ${JSON.stringify(event, null, 2)}`)
+      api.logger.info(`[multi-message-mode] before_agent_reply ctx: ${JSON.stringify(ctx, null, 2)}`)
+      const identifier = getIdentifier(ctx);
 
-    //   // Activation: /mmm or voice "multi-message mode"
-    //   if (isActivationRequest(cleanedBody)) {
-    //     api.logger.info(`[multi-message-mode] Activate command for ${identifier}`);
-    //     const active = await isBatchActive(identifier);
-    //     if (active) {
-    //       return { handled: true, reply: { text: 'Multi-message mode already active.' } };
-    //     }
-    //     await activateBatch(identifier);
-    //     return { handled: true, reply: { text: 'Multi-message mode activated. Send messages, then /mmc to release.' } };
-    //   }
+      const slashCommands = ctx.cfg?.slashCommands ?? {};
+
+      const mmmSlash = slashCommands.mmm ?? '/mmm';
+
+      const mmcSlash = slashCommands.mmc ?? '/mmc';
+
+      const mmmCancelSlash = slashCommands.mmmCancel ?? '/mmm-cancel';
+
       
-    //   // Cancel: /mmm-cancel only (no voice equivalent)
-    //   if (isCancelRequest(cleanedBody)) {
-    //     api.logger.info(`[multi-message-mode] Cancel command for ${identifier}`);
-    //     const active = await isBatchActive(identifier);
-    //     if (!active) {
-    //       return { handled: true, reply: { text: 'No active multi-message batch.' } };
-    //     }
-    //     await cancelBatch(identifier);
-    //     return { handled: true, reply: { text: 'Multi-message mode cancelled.' } };
-    //   }
+      if (!identifier) {
+        return undefined;
+      }
       
-    //   // Deactivation: /mmc or voice "multi-message complete"
-    //   // Let through to before_prompt_build
-    //   if (isDeactivationRequest(cleanedBody)) {
-    //     const active = await isBatchActive(identifier);
-    //     if (active) {
-    //       api.logger.info(`[multi-message-mode] /mmc received, deactivating for ${identifier}`);
-    //       await deactivateBatch(identifier);
-    //     }
-    //     return undefined; // Let through to before_prompt_build
-    //   }
+      const cleanedBody = event.cleanedBody || '';
+      const messageText = cleanedBody.trim();
+
+      // Activation: /mmm or voice "multi-message mode"
+      if (isActivationRequest(cleanedBody, ctx.cfg)) {
+        api.logger.info(`[multi-message-mode] Activate command for ${identifier}`);
+        const active = await isBatchActive(identifier);
+        if (active) {
+          return { handled: true, reply: { text: 'Multi-message mode already active.' } };
+        }
+        await activateBatch(identifier);
+        return { handled: true, reply: { text: 'Multi-message mode activated. Send messages, then ' + mmcSlash + ' to release.' } };
+      }
       
-    //   // Message buffering (when batch is active)
-    //   const active = await isBatchActive(identifier);
-    //   if (!active) {
-    //     return undefined; // Let agent process normally
-    //   }
+      // Cancel: /mmm-cancel only (no voice equivalent)
+      if (isCancelRequest(cleanedBody, ctx.cfg)) {
+        api.logger.info(`[multi-message-mode] Cancel command for ${identifier}`);
+        const active = await isBatchActive(identifier);
+        if (!active) {
+          return { handled: true, reply: { text: 'No active multi-message batch.' } };
+        }
+        await cancelBatch(identifier);
+        return { handled: true, reply: { text: 'Multi-message mode cancelled.' } };
+      }
       
-    //   // Batch is active - buffer transcript and cancel agent turn
-    //   if (messageText) {
-    //     let content = messageText;
-    //     // If it's a voice message, extract just the transcript
-    //     const transcript = extractTranscript(cleanedBody);
-    //     if (transcript !== null) {
-    //       content = transcript;
-    //     }
-    //     await appendToBuffer(identifier, content);
-    //   }
+      // Deactivation: /mmc or voice "multi-message complete"
+      // Let through to before_prompt_build
+      if (isDeactivationRequest(cleanedBody, ctx.cfg)) {
+        const active = await isBatchActive(identifier);
+        if (active) {
+          api.logger.info(`[multi-message-mode] /mmc received, deactivating for ${identifier}`);
+          await deactivateBatch(identifier);
+        }
+        return undefined; // Let through to before_prompt_build
+      }
       
-    //   return { handled: true, reply: { text: 'Message buffered.' } }; // Cancel agent turn and reply.
-    // }, { priority: 100 });
+      // Message buffering (when batch is active)
+      const active = await isBatchActive(identifier);
+      if (!active) {
+        return undefined; // Let agent process normally
+      }
+      
+      // Batch is active - buffer transcript and cancel agent turn
+      if (messageText) {
+        let content = messageText;
+        // If it's a voice message, extract just the transcript
+        const transcript = extractTranscript(cleanedBody);
+        if (transcript !== null) {
+          content = transcript;
+        }
+        await appendToBuffer(identifier, content);
+      }
+      
+      return { handled: true, reply: { text: 'Message buffered.' } }; // Cancel agent turn and reply.
+    }, { priority: 100 });
     
     // ========================================
     // before_prompt_build hook
     // Handles: /mmc - injects buffered content into LLM input
     // ========================================
-    // api.on('before_prompt_build', async (event, ctx) => {
-    //   // Check if prompt is a deactivation request (/mmc or voice "multi-message complete")
-    //   const promptText = event.prompt || '';
-    //   const isDeactivation = promptText.includes('/mmc') || isDeactivationRequest(promptText);
-      
-    //   if (!isDeactivation) {
-    //     return undefined;
-    //   }
-      
-    //   const identifier = getIdentifier(ctx);
-      
-    //   if (!identifier) {
-    //     return undefined;
-    //   }
-      
-    //   // Read the buffer
-    //   const dir = getBatchDir(identifier);
-    //   let bufferContent = '';
-    //   try {
-    //     bufferContent = await fs.readFile(join(dir, 'buffer.txt'), 'utf8');
-    //   } catch (err) {}
+    api.on('before_prompt_build', async (event, ctx) => {
+      // Check if prompt is a deactivation request (/mmc or voice "multi-message complete")
+      const promptText = event.prompt || '';
+      const mmcSlash = ctx.cfg?.slashCommands?.mmc ?? '/mmc';
 
-    //   if (!bufferContent.trim()) {
-    //     return { prependContext: 'The user released a multi-message batch, but no messages were buffered.' };
-    //   }
+      const isDeactivation = promptText.includes(mmcSlash) || isDeactivationRequest(promptText, ctx.cfg);
+      
+      if (!isDeactivation) {
+        return undefined;
+      }
+      
+      const identifier = getIdentifier(ctx);
+      
+      if (!identifier) {
+        return undefined;
+      }
+      
+      // Read the buffer
+      const dir = getBatchDir(identifier);
+      let bufferContent = '';
+      try {
+        bufferContent = await fs.readFile(join(dir, 'buffer.txt'), 'utf8');
+      } catch (err) {}
 
-    //   // Clean up the batch directory (delete buffer files)
-    //   try {
-    //     await cancelBatch(identifier);
-    //   } catch (err) {
-    //     api.logger.warn(`[multi-message-mode] Failed to clean up batch for ${identifier}: ${err.message}`);
-    //   }
+      if (!bufferContent.trim()) {
+        return { prependContext: 'The user released a multi-message batch, but no messages were buffered.' };
+      }
 
-    //   // Inject buffer content via prependContext
-    //   api.logger.info(`[multi-message-mode] Injecting ${bufferContent.length} chars via prependContext`);
-    //   return { 
-    //     prependContext: `The user has collected the following messages via multi-message mode. Process them as a single request:\n---\n${bufferContent}---\n\n`
-    //   };
-    // }, { priority: 100 });
+      // Clean up the batch directory (delete buffer files)
+      try {
+        await cancelBatch(identifier);
+      } catch (err) {
+        api.logger.warn(`[multi-message-mode] Failed to clean up batch for ${identifier}: ${err.message}`);
+      }
+
+      // Inject buffer content via prependContext
+      api.logger.info(`[multi-message-mode] Injecting ${bufferContent.length} chars via prependContext`);
+      return { 
+        prependContext: `The user has collected the following messages via multi-message mode. Process them as a single request:\n---\n${bufferContent}---\n\n`
+      };
+    }, { priority: 100 });
   }
 });
