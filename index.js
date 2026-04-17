@@ -217,7 +217,7 @@ export default definePluginEntry({
       const messageText = cleanedBody.trim();
 
       // Activation: /mmm or voice "multi-message mode"
-      if (isActivationRequest(cleanedBody, ctx.cfg)) {
+      if (isActivationRequest(cleanedBody, api.pluginConfig)) {
         api.logger.info(`[multi-message-mode] Activate command for ${identifier}`);
         const active = await isBatchActive(identifier);
         if (active) {
