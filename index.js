@@ -68,8 +68,10 @@ const cancelBatch = async (identifier) => {
 // Extract transcript from voice message cleanedBody
 // Format: "[Audio]\nUser text:\n... Transcript:\nMulti-message mode."
 const extractTranscript = (cleanedBody) => {
+  api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody}`);
   const isAudio = cleanedBody.includes('<media:audio>') || cleanedBody.includes('[Audio]');
   if (!isAudio || !cleanedBody.includes('Transcript:')) {
+    return null;
   }
   const match = cleanedBody.match(/Transcript:\n(.+?)(?:\n---|$)/s);
   return match ? match[1].trim() : null;
@@ -96,6 +98,8 @@ const isActivationRequest = (cleanedBody, cfg = {}) => {
   }
   const normalized = normalizeText(transcript);
   const normalizedKeyword = normalizeText(voiceActivate);
+  api.logger.info(`[multi-message-mode] normalized: ${normalized}`);
+  api.logger.info(`[multi-message-mode] normalizedKeyword: ${normalizedKeyword}`);
   return normalized === normalizedKeyword;
 };
 
