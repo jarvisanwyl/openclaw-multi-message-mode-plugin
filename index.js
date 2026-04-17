@@ -65,63 +65,14 @@ const cancelBatch = async (identifier) => {
 
 
 
-// Extract transcript from voice message cleanedBody
-// Format: "[Audio]\nUser text:\n... Transcript:\nMulti-message mode."
-const extractTranscript = (cleanedBody) => {
-  api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody}`);
-  const isAudio = cleanedBody.includes('<media:audio>') || cleanedBody.includes('[Audio]');
-  if (!isAudio || !cleanedBody.includes('Transcript:')) {
-    return null;
-  }
-  const match = cleanedBody.match(/Transcript:\n(.+?)(?:\n---|$)/s);
-  return match ? match[1].trim() : null;
-};
+
 
 // Normalize text for keyword matching: lowercase, remove non-letter characters
 const normalizeText = (text) => {
   return text.toLowerCase().replace(/[^a-z]/g, '');
 };
 
-// Check if cleanedBody is an activation request (/mmm or voice "multi-message mode")
-const isActivationRequest = (cleanedBody, cfg = {}) => {
-  api.logger.info(`[multi-message-mode] cfg: ${json.stringify(cfg, null, 2)}`);
-  const slashCommands = cfg?.slashCommands ?? {};
-  const voiceKeywords = cfg?.voiceKeywords ?? {};
-  const mmmSlash = slashCommands.mmm ?? '/mmm';
-  const voiceActivate = voiceKeywords.activate ?? 'multi-message mode';
-  const trimmed = cleanedBody.trim();
-  if (trimmed === mmmSlash) {
-    return true;
-  }
-  const transcript = extractTranscript(cleanedBody);
-  if (!transcript || transcript.length > 30) {
-    return false; // Too long, treat as normal content
-  }
-  const normalized = normalizeText(transcript);
-  const normalizedKeyword = normalizeText(voiceActivate);
-  api.logger.info(`[multi-message-mode] normalized: ${normalized}`);
-  api.logger.info(`[multi-message-mode] normalizedKeyword: ${normalizedKeyword}`);
-  return normalized === normalizedKeyword;
-};
 
-// Check if cleanedBody is a deactivation request (/mmc or voice "multi-message complete")
-const isDeactivationRequest = (cleanedBody, cfg = {}) => {
-  const slashCommands = cfg?.slashCommands ?? {};
-  const voiceKeywords = cfg?.voiceKeywords ?? {};
-  const mmcSlash = slashCommands.mmc ?? '/mmc';
-  const voiceDeactivate = voiceKeywords.deactivate ?? 'multi-message complete';
-  const trimmed = cleanedBody.trim();
-  if (trimmed === mmcSlash) {
-    return true;
-  }
-  const transcript = extractTranscript(cleanedBody);
-  if (!transcript || transcript.length > 30) {
-    return false;
-  }
-  const normalized = normalizeText(transcript);
-  const normalizedKeyword = normalizeText(voiceDeactivate);
-  return normalized === normalizedKeyword;
-};
 
 // Check if cleanedBody is a cancel request (/mmm-cancel)
 const isCancelRequest = (cleanedBody, cfg = {}) => {
@@ -155,6 +106,62 @@ export default definePluginEntry({
   description: 'Plugin for buffering multiple messages before processing',
   
   register(api) {
+    
+    
+    // Check if cleanedBody is an activation request (/mmm or voice "multi-message mode")
+    const isActivationRequest = (cleanedBody, cfg = {}) => {
+      api.logger.info(`[multi-message-mode] cfg: ${json.stringify(cfg, null, 2)}`);
+      const slashCommands = cfg?.slashCommands ?? {};
+      const voiceKeywords = cfg?.voiceKeywords ?? {};
+      const mmmSlash = slashCommands.mmm ?? '/mmm';
+      const voiceActivate = voiceKeywords.activate ?? 'multi-message mode';
+      const trimmed = cleanedBody.trim();
+      if (trimmed === mmmSlash) {
+        return true;
+      }
+      const transcript = extractTranscript(cleanedBody);
+      if (!transcript || transcript.length > 30) {
+        return false; // Too long, treat as normal content
+      }
+      const normalized = normalizeText(transcript);
+      const normalizedKeyword = normalizeText(voiceActivate);
+      api.logger.info(`[multi-message-mode] normalized: ${normalized}`);
+      api.logger.info(`[multi-message-mode] normalizedKeyword: ${normalizedKeyword}`);
+      return normalized === normalizedKeyword;
+    };
+    
+    // Check if cleanedBody is a deactivation request (/mmc or voice "multi-message complete")
+    const isDeactivationRequest = (cleanedBody, cfg = {}) => {
+      const slashCommands = cfg?.slashCommands ?? {};
+      const voiceKeywords = cfg?.voiceKeywords ?? {};
+      const mmcSlash = slashCommands.mmc ?? '/mmc';
+      const voiceDeactivate = voiceKeywords.deactivate ?? 'multi-message complete';
+      const trimmed = cleanedBody.trim();
+      if (trimmed === mmcSlash) {
+        return true;
+      }
+      const transcript = extractTranscript(cleanedBody);
+      if (!transcript || transcript.length > 30) {
+        return false;
+      }
+      const normalized = normalizeText(transcript);
+      const normalizedKeyword = normalizeText(voiceDeactivate);
+      return normalized === normalizedKeyword;
+    };
+    
+    
+    // Extract transcript from voice message cleanedBody
+    // Format: "[Audio]\nUser text:\n... Transcript:\nMulti-message mode."
+    const extractTranscript = (cleanedBody) => {
+      api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody}`);
+      const isAudio = cleanedBody.includes('<media:audio>') || cleanedBody.includes('[Audio]');
+      if (!isAudio || !cleanedBody.includes('Transcript:')) {
+        return null;
+      }
+      const match = cleanedBody.match(/Transcript:\n(.+?)(?:\n---|$)/s);
+      return match ? match[1].trim() : null;
+    };
+    
     api.logger.info('[multi-message-mode] Plugin registering');
     
     // Append message to buffer with error logging
