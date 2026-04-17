@@ -200,7 +200,7 @@ export default definePluginEntry({
       api.logger.info(`[multi-message-mode] before_agent_reply ctx: ${JSON.stringify(ctx, null, 2)}`)
       const identifier = getIdentifier(ctx);
 
-      const slashCommands = ctx.cfg?.slashCommands ?? {};
+      const slashCommands = api.pluginConfig?.slashCommands ?? {};
 
       const mmmSlash = slashCommands.mmm ?? '/mmm';
 
@@ -228,7 +228,7 @@ export default definePluginEntry({
       }
       
       // Cancel: /mmm-cancel only (no voice equivalent)
-      if (isCancelRequest(cleanedBody, ctx.cfg)) {
+      if (isCancelRequest(cleanedBody, api.pluginConfig)) {
         api.logger.info(`[multi-message-mode] Cancel command for ${identifier}`);
         const active = await isBatchActive(identifier);
         if (!active) {
@@ -240,7 +240,7 @@ export default definePluginEntry({
       
       // Deactivation: /mmc or voice "multi-message complete"
       // Let through to before_prompt_build
-      if (isDeactivationRequest(cleanedBody, ctx.cfg)) {
+      if (isDeactivationRequest(cleanedBody, api.pluginConfig)) {
         const active = await isBatchActive(identifier);
         if (active) {
           api.logger.info(`[multi-message-mode] /mmc received, deactivating for ${identifier}`);
@@ -276,9 +276,9 @@ export default definePluginEntry({
     api.on('before_prompt_build', async (event, ctx) => {
       // Check if prompt is a deactivation request (/mmc or voice "multi-message complete")
       const promptText = event.prompt || '';
-      const mmcSlash = ctx.cfg?.slashCommands?.mmc ?? '/mmc';
+      const mmcSlash = api.pluginConfig?.slashCommands?.mmc ?? '/mmc';
 
-      const isDeactivation = promptText.includes(mmcSlash) || isDeactivationRequest(promptText, ctx.cfg);
+      const isDeactivation = promptText.includes(mmcSlash) || isDeactivationRequest(promptText, api.pluginConfig);
       
       if (!isDeactivation) {
         return undefined;
