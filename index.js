@@ -107,7 +107,8 @@ export default definePluginEntry({
   
   register(api) {
     
-    
+    const config = parseConfig(api.pluginConfig);
+    api.logger.info(`[multi-message-mode] config: ${JSON.stringify(config, null, 2)}`);
     // Check if cleanedBody is an activation request (/mmm or voice "multi-message mode")
     const isActivationRequest = (cleanedBody, cfg = {}) => {
       api.logger.info(`[multi-message-mode] cfg: ${JSON.stringify(cfg, null, 2)}`);
