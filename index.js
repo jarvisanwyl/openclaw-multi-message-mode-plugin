@@ -72,16 +72,6 @@ const normalizeText = (text) => {
   return text.toLowerCase().replace(/[^a-z]/g, '');
 };
 
-
-
-// Check if cleanedBody is a cancel request
-const isCancelRequest = (cleanedBody, cfg = {}) => {
-  const slashCommands = cfg?.slashCommands ?? {};
-  const mmmCancelSlash = slashCommands.cancel ?? '/mmm-cancel';
-  const trimmed = cleanedBody.trim();
-  return trimmed === mmmCancelSlash;
-};
-
 // Get identifier from sessionKey
 // sessionKey format: "agent:main:telegram:group:-1003690577722:topic:1867"
 // We want: "telegram:-1003690577722:topic:1867" (skip the chat type)
@@ -107,10 +97,8 @@ export default definePluginEntry({
   
   register(api) {
     
-    api.logger.info(`[multi-message-mode] config: ${JSON.stringify(api.pluginConfig, null, 2)}`);
     // Check if cleanedBody is an activation request
     const isActivationRequest = (cleanedBody, cfg = {}) => {
-      api.logger.info(`[multi-message-mode] cfg: ${JSON.stringify(cfg, null, 2)}`);
       const slashCommands = cfg?.slashCommands ?? {};
       const voiceKeywords = cfg?.voiceKeywords ?? {};
       const mmmSlash = slashCommands.activate ?? '/mmm';
@@ -125,8 +113,6 @@ export default definePluginEntry({
       }
       const normalized = normalizeText(transcript);
       const normalizedKeyword = normalizeText(voiceActivate);
-      api.logger.info(`[multi-message-mode] normalized: ${normalized}`);
-      api.logger.info(`[multi-message-mode] normalizedKeyword: ${normalizedKeyword}`);
       return normalized === normalizedKeyword;
     };
     
@@ -149,11 +135,28 @@ export default definePluginEntry({
       return normalized === normalizedKeyword;
     };
     
+    // Check if cleanedBody is a cancel request
+    const isCancelRequest = (cleanedBody, cfg = {}) => {
+      const slashCommands = cfg?.slashCommands ?? {};
+      const voiceKeywords = cfg?.voiceKeywords ?? {};
+      const mmmCancelSlash = slashCommands.cancel ?? '/mmm-cancel';
+      const voiceCancel = voiceKeywords.cancel ?? 'multi-message cancel';
+      const trimmed = cleanedBody.trim();
+      if (trimmed === mmmCancelSlash) {
+        return true;
+      }
+      const transcript = extractTranscript(cleanedBody);
+      if (!transcript || transcript.length > 30) {
+        return false;
+      }
+      const normalized = normalizeText(transcript);
+      const normalizedKeyword = normalizeText(voiceCancel);
+      return normalized === normalizedKeyword;
+    };
     
     // Extract transcript from voice message cleanedBody
-    // Format: "[Audio]\nUser text:\n... Transcript:\nMulti-message mode."
     const extractTranscript = (cleanedBody) => {
-      api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody}`);
+      //api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody}`);
       const isAudio = cleanedBody.includes('<media:audio>') || cleanedBody.includes('[Audio]');
       if (!isAudio || !cleanedBody.includes('Transcript:')) {
         return null;
@@ -194,18 +197,11 @@ export default definePluginEntry({
     // before_agent_reply hook
     // ========================================
     api.on('before_agent_reply', async (event, ctx) => {
-      api.logger.info(`[multi-message-mode] before_agent_reply event: ${JSON.stringify(event, null, 2)}`)
-      api.logger.info(`[multi-message-mode] before_agent_reply ctx: ${JSON.stringify(ctx, null, 2)}`)
       const identifier = getIdentifier(ctx);
-
       const slashCommands = api.pluginConfig?.slashCommands ?? {};
-
       const mmmSlash = slashCommands.activate ?? '/mmm';
-
       const mmcSlash = slashCommands.deactivate ?? '/mmc';
-
       const mmmCancelSlash = slashCommands.cancel ?? '/mmm-cancel';
-
       
       if (!identifier) {
         return undefined;
