@@ -9,9 +9,9 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "mmm": { "type": "string", "default": "/mmm" },
-          "mmc": { "type": "string", "default": "/mmc" },
-          "mmmCancel": { "type": "string", "default": "/mmm-cancel" }
+          "activate": { "type": "string", "default": "/mmm" },
+          "deactivate": { "type": "string", "default": "/mmc" },
+          "cancel": { "type": "string", "default": "/mmm-cancel" }
         }
       },
       "voiceKeywords": {
