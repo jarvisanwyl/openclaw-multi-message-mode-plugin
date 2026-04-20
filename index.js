@@ -200,7 +200,9 @@ export default definePluginEntry({
       const identifier = getIdentifier(ctx);
       const slashCommands = api.pluginConfig?.slashCommands ?? {};
       const mmmSlash = slashCommands.activate ?? '/mmm';
+      const voiceKeywords = cfg?.voiceKeywords ?? {};
       const mmcSlash = slashCommands.deactivate ?? '/mmc';
+      const voiceDeactivate = voiceKeywords.deactivate ?? 'multi-message complete';
       const mmmCancelSlash = slashCommands.cancel ?? '/mmm-cancel';
       
       if (!identifier) {
@@ -218,7 +220,9 @@ export default definePluginEntry({
           return { handled: true, reply: { text: 'Multi-message mode already active.' } };
         }
         await activateBatch(identifier);
-        return { handled: true, reply: { text: 'Multi-message mode activated. Send messages, then ' + mmcSlash + ' to release.' } };
+        return { handled: true, reply: {
+          text: `Multi-message mode activated. Send messages, then type ${mmcSlash} or say "${voiceDeactivate}" to release.`
+        } };
       }
       
       // Cancel
