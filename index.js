@@ -200,7 +200,7 @@ export default definePluginEntry({
       const identifier = getIdentifier(ctx);
       const slashCommands = api.pluginConfig?.slashCommands ?? {};
       const mmmSlash = slashCommands.activate ?? '/mmm';
-      const voiceKeywords = cfg?.voiceKeywords ?? {};
+      const voiceKeywords = api.pluginConfig?.voiceKeywords ?? {};
       const mmcSlash = slashCommands.deactivate ?? '/mmc';
       const voiceDeactivate = voiceKeywords.deactivate ?? 'multi-message complete';
       const mmmCancelSlash = slashCommands.cancel ?? '/mmm-cancel';
