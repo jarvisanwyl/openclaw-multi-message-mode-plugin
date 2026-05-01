@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { join, extname } from 'path';
 import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry';
+import { transcribeFirstAudio } from 'openclaw/plugin-sdk/media-runtime';
 
 const BATCH_ROOT = '/tmp/openclaw/multi-message-mode/batch';
 
@@ -64,54 +65,10 @@ const cancelBatch = async (identifier) => {
 
 
 
-// Extract transcript from voice message cleanedBody
-// Format: "[Audio]\nUser text:\n... Transcript:\nMulti-message mode."
-const extractTranscript = (cleanedBody) => {
-  const isAudio = cleanedBody.includes('<media:audio>') || cleanedBody.includes('[Audio]');
-  if (!isAudio || !cleanedBody.includes('Transcript:')) {
-    return null;
-  }
-  const match = cleanedBody.match(/Transcript:\n(.+?)(?:\n---|$)/s);
-  return match ? match[1].trim() : null;
-};
 
 // Normalize text for keyword matching: lowercase, remove non-letter characters
 const normalizeText = (text) => {
   return text.toLowerCase().replace(/[^a-z]/g, '');
-};
-
-// Check if cleanedBody is an activation request (/mmm or voice "multi-message mode")
-const isActivationRequest = (cleanedBody) => {
-  const trimmed = cleanedBody.trim();
-  if (trimmed === '/mmm') {
-    return true;
-  }
-  const transcript = extractTranscript(cleanedBody);
-  if (!transcript || transcript.length > 30) {
-    return false; // Too long, treat as normal content
-  }
-  const normalized = normalizeText(transcript);
-  return normalized === 'multimessagemode';
-};
-
-// Check if cleanedBody is a deactivation request (/mmc or voice "multi-message complete")
-const isDeactivationRequest = (cleanedBody) => {
-  const trimmed = cleanedBody.trim();
-  if (trimmed === '/mmc') {
-    return true;
-  }
-  const transcript = extractTranscript(cleanedBody);
-  if (!transcript || transcript.length > 30) {
-    return false;
-  }
-  const normalized = normalizeText(transcript);
-  return normalized === 'multimessagecomplete';
-};
-
-// Check if cleanedBody is a cancel request (/mmm-cancel)
-const isCancelRequest = (cleanedBody) => {
-  const trimmed = cleanedBody.trim();
-  return trimmed === '/mmm-cancel';
 };
 
 // Get identifier from sessionKey
@@ -138,6 +95,75 @@ export default definePluginEntry({
   description: 'Plugin for buffering multiple messages before processing',
   
   register(api) {
+    
+    // Check if cleanedBody is an activation request
+    const isActivationRequest = (cleanedBody, cfg = {}) => {
+      const slashCommands = cfg?.slashCommands ?? {};
+      const voiceKeywords = cfg?.voiceKeywords ?? {};
+      const mmmSlash = slashCommands.activate ?? '/mmm';
+      const voiceActivate = voiceKeywords.activate ?? 'multi-message mode';
+      const trimmed = cleanedBody.trim();
+      if (trimmed === mmmSlash) {
+        return true;
+      }
+      const transcript = extractTranscript(cleanedBody);
+      if (!transcript || transcript.length > 30) {
+        return false; // Too long, treat as normal content
+      }
+      const normalized = normalizeText(transcript);
+      const normalizedKeyword = normalizeText(voiceActivate);
+      return normalized === normalizedKeyword;
+    };
+    
+    // Check if cleanedBody is a deactivation request
+    const isDeactivationRequest = (cleanedBody, cfg = {}) => {
+      const slashCommands = cfg?.slashCommands ?? {};
+      const voiceKeywords = cfg?.voiceKeywords ?? {};
+      const mmcSlash = slashCommands.deactivate ?? '/mmc';
+      const voiceDeactivate = voiceKeywords.deactivate ?? 'multi-message complete';
+      const trimmed = cleanedBody.trim();
+      if (trimmed === mmcSlash) {
+        return true;
+      }
+      const transcript = extractTranscript(cleanedBody);
+      if (!transcript || transcript.length > 30) {
+        return false;
+      }
+      const normalized = normalizeText(transcript);
+      const normalizedKeyword = normalizeText(voiceDeactivate);
+      return normalized === normalizedKeyword;
+    };
+    
+    // Check if cleanedBody is a cancel request
+    const isCancelRequest = (cleanedBody, cfg = {}) => {
+      const slashCommands = cfg?.slashCommands ?? {};
+      const voiceKeywords = cfg?.voiceKeywords ?? {};
+      const mmmCancelSlash = slashCommands.cancel ?? '/mmm-cancel';
+      const voiceCancel = voiceKeywords.cancel ?? 'multi-message cancel';
+      const trimmed = cleanedBody.trim();
+      if (trimmed === mmmCancelSlash) {
+        return true;
+      }
+      const transcript = extractTranscript(cleanedBody);
+      if (!transcript || transcript.length > 30) {
+        return false;
+      }
+      const normalized = normalizeText(transcript);
+      const normalizedKeyword = normalizeText(voiceCancel);
+      return normalized === normalizedKeyword;
+    };
+    
+    // Extract transcript from voice message cleanedBody
+    const extractTranscript = (cleanedBody) => {
+      //api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody}`);
+      const isAudio = cleanedBody.includes('<media:audio>') || cleanedBody.includes('[Audio]');
+      if (!isAudio || !cleanedBody.includes('Transcript:')) {
+        return null;
+      }
+      const match = cleanedBody.match(/Transcript:\n(.+?)(?:\n---|$)/s);
+      return match ? match[1].trim() : null;
+    };
+    
     api.logger.info('[multi-message-mode] Plugin registering');
     
     // Append message to buffer with error logging
@@ -168,11 +194,15 @@ export default definePluginEntry({
     
     // ========================================
     // before_agent_reply hook
-    // Handles: /mmm, /mmm-cancel, buffering, blocking
-    // Lets /mmc pass through to before_prompt_build
     // ========================================
     api.on('before_agent_reply', async (event, ctx) => {
       const identifier = getIdentifier(ctx);
+      const slashCommands = api.pluginConfig?.slashCommands ?? {};
+      const mmmSlash = slashCommands.activate ?? '/mmm';
+      const voiceKeywords = api.pluginConfig?.voiceKeywords ?? {};
+      const mmcSlash = slashCommands.deactivate ?? '/mmc';
+      const voiceDeactivate = voiceKeywords.deactivate ?? 'multi-message complete';
+      const mmmCancelSlash = slashCommands.cancel ?? '/mmm-cancel';
       
       if (!identifier) {
         return undefined;
@@ -181,19 +211,21 @@ export default definePluginEntry({
       const cleanedBody = event.cleanedBody || '';
       const messageText = cleanedBody.trim();
 
-      // Activation: /mmm or voice "multi-message mode"
-      if (isActivationRequest(cleanedBody)) {
+      // Activation
+      if (isActivationRequest(cleanedBody, api.pluginConfig)) {
         api.logger.info(`[multi-message-mode] Activate command for ${identifier}`);
         const active = await isBatchActive(identifier);
         if (active) {
           return { handled: true, reply: { text: 'Multi-message mode already active.' } };
         }
         await activateBatch(identifier);
-        return { handled: true, reply: { text: 'Multi-message mode activated. Send messages, then /mmc to release.' } };
+        return { handled: true, reply: {
+          text: `Multi-message mode activated. Send messages, then type ${mmcSlash} or say "${voiceDeactivate}" to release.`
+        } };
       }
       
-      // Cancel: /mmm-cancel only (no voice equivalent)
-      if (isCancelRequest(cleanedBody)) {
+      // Cancel
+      if (isCancelRequest(cleanedBody, api.pluginConfig)) {
         api.logger.info(`[multi-message-mode] Cancel command for ${identifier}`);
         const active = await isBatchActive(identifier);
         if (!active) {
@@ -203,12 +235,12 @@ export default definePluginEntry({
         return { handled: true, reply: { text: 'Multi-message mode cancelled.' } };
       }
       
-      // Deactivation: /mmc or voice "multi-message complete"
+      // Deactivation
       // Let through to before_prompt_build
-      if (isDeactivationRequest(cleanedBody)) {
+      if (isDeactivationRequest(cleanedBody, api.pluginConfig)) {
         const active = await isBatchActive(identifier);
         if (active) {
-          api.logger.info(`[multi-message-mode] /mmc received, deactivating for ${identifier}`);
+          api.logger.info(`[multi-message-mode] deactivate command received, deactivating for ${identifier}`);
           await deactivateBatch(identifier);
         }
         return undefined; // Let through to before_prompt_build
@@ -236,12 +268,13 @@ export default definePluginEntry({
     
     // ========================================
     // before_prompt_build hook
-    // Handles: /mmc - injects buffered content into LLM input
     // ========================================
     api.on('before_prompt_build', async (event, ctx) => {
-      // Check if prompt is a deactivation request (/mmc or voice "multi-message complete")
+      // Check if prompt is a deactivation request
       const promptText = event.prompt || '';
-      const isDeactivation = promptText.includes('/mmc') || isDeactivationRequest(promptText);
+      const mmcSlash = api.pluginConfig?.slashCommands?.deactivate ?? '/mmc';
+
+      const isDeactivation = promptText.includes(mmcSlash) || isDeactivationRequest(promptText, api.pluginConfig);
       
       if (!isDeactivation) {
         return undefined;
