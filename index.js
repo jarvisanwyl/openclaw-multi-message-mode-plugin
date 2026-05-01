@@ -155,7 +155,7 @@ export default definePluginEntry({
     
     // Extract transcript from voice message cleanedBody
     const extractTranscript = (cleanedBody) => {
-      //api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody}`);
+      api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody}`);
       const isAudio = cleanedBody.includes('<media:audio>') || cleanedBody.includes('[Audio]');
       if (!isAudio || !cleanedBody.includes('Transcript:')) {
         return null;
