@@ -5,6 +5,28 @@ import { transcribeFirstAudio } from 'openclaw/plugin-sdk/media-runtime';
 
 const BATCH_ROOT = '/tmp/openclaw/multi-message-mode/batch';
 
+const TRANSCRIPT_PATTERNS = [
+  {
+    name: "new_telegram_dm",
+    test: (body) =>
+      body.includes("[Audio transcript (machine-generated, untrusted)]:"),
+    extract: (body) => {
+      const match = body.match(
+        /\[Audio transcript \(machine-generated, untrusted\)\]:\s*"([\s\S]*?)"/
+      );
+      return match ? match[1].trim() : null;
+    },
+  },
+  {
+    name: "general",
+    test: (body) => (body.includes('<media:audio>') || body.includes('[Audio]')) && body.includes("Transcript:"),
+    extract: (body) => {
+      const match = body.match(/Transcript:\n([\s\S]+?)(?:\n---|$)/);
+      return match ? match[1].trim() : null;
+    },
+  },
+];
+
 // Normalize identifier for filesystem use
 const normalizeIdentifier = (identifier) => {
   return identifier.replace(/[^a-zA-Z0-9_.-]/g, '_');
@@ -156,12 +178,15 @@ export default definePluginEntry({
     // Extract transcript from voice message cleanedBody
     const extractTranscript = (cleanedBody) => {
       api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody}`);
-      const isAudio = cleanedBody.includes('<media:audio>') || cleanedBody.includes('[Audio]');
-      if (!isAudio || !cleanedBody.includes('Transcript:')) {
-        return null;
+
+      for (const pattern of TRANSCRIPT_PATTERNS) {
+        if (pattern.test(cleanedBody)) {
+          const result = pattern.extract(cleanedBody);
+          if (result) return result;
+        }
       }
-      const match = cleanedBody.match(/Transcript:\n(.+?)(?:\n---|$)/s);
-      return match ? match[1].trim() : null;
+
+      return null;
     };
     
     api.logger.info('[multi-message-mode] Plugin registering');
