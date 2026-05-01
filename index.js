@@ -27,6 +27,8 @@ const TRANSCRIPT_PATTERNS = [
   },
 ];
 
+let registered = false;
+
 // Normalize identifier for filesystem use
 const normalizeIdentifier = (identifier) => {
   return identifier.replace(/[^a-zA-Z0-9_.-]/g, '_');
@@ -119,11 +121,11 @@ export default definePluginEntry({
   register(api) {
     
     // Check if already registered to prevent duplicate hooks
-    if (this._registered) {
+    if (registered) {
       api.logger.info('[multi-message-mode] Already registered, skipping');
       return;
     }
-    this._registered = true;
+    registered = true;
     
     // Check if cleanedBody is an activation request
     const isActivationRequest = (cleanedBody, cfg = {}) => {
