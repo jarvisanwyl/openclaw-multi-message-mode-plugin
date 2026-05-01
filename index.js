@@ -118,6 +118,13 @@ export default definePluginEntry({
   
   register(api) {
     
+    // Check if already registered to prevent duplicate hooks
+    if (this._registered) {
+      api.logger.info('[multi-message-mode] Already registered, skipping');
+      return;
+    }
+    this._registered = true;
+    
     // Check if cleanedBody is an activation request
     const isActivationRequest = (cleanedBody, cfg = {}) => {
       const slashCommands = cfg?.slashCommands ?? {};
