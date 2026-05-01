@@ -177,8 +177,6 @@ export default definePluginEntry({
     
     // Extract transcript from voice message cleanedBody
     const extractTranscript = (cleanedBody) => {
-      api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody}`);
-
       for (const pattern of TRANSCRIPT_PATTERNS) {
         if (pattern.test(cleanedBody)) {
           const result = pattern.extract(cleanedBody);
@@ -234,6 +232,7 @@ export default definePluginEntry({
       }
       
       const cleanedBody = event.cleanedBody || '';
+      api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody}`);
       const messageText = cleanedBody.trim();
 
       // Activation
