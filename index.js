@@ -219,8 +219,8 @@ export default definePluginEntry({
     // before_agent_reply hook
     // ========================================
     api.on('before_agent_reply', async (event, ctx) => {
-      // api.logger.info(`[multi-message-mode] ctx keys: ${ctx ? Object.keys(ctx).join(', ') : 'null'}`);
-      api.logger.info(`[multi-message-mode] ctx: ${JSON.stringify(ctx, null, 2)}`);
+      api.logger.info(`[multi-message-mode] ctx keys: ${ctx ? Object.keys(ctx).join(', ') : 'null'}`);
+      api.logger.info(`[multi-message-mode] ctx.sessionKey: ${ctx?.sessionKey}`);
       const identifier = getIdentifier(ctx);
       const slashCommands = api.pluginConfig?.slashCommands ?? {};
       const mmmSlash = slashCommands.activate ?? '/mmm';
@@ -298,7 +298,10 @@ export default definePluginEntry({
     api.on('before_prompt_build', async (event, ctx) => {
       // Check if prompt is a deactivation request
       const promptText = event.prompt || '';
-      const mmcSlash = api.pluginConfig?.slashCommands?.deactivate ?? '/mmc';
+      const slashCommands = api.pluginConfig?.slashCommands ?? {};
+      const voiceKeywords = api.pluginConfig?.voiceKeywords ?? {};
+      const mmcSlash = slashCommands.deactivate ?? '/mmc';
+      const voiceDeactivate = voiceKeywords.deactivate ?? 'multi-message complete';
 
       const isDeactivation = promptText.includes(mmcSlash) || isDeactivationRequest(promptText, api.pluginConfig);
       
@@ -333,7 +336,7 @@ export default definePluginEntry({
       // Inject buffer content via prependContext
       api.logger.info(`[multi-message-mode] Injecting ${bufferContent.length} chars via prependContext`);
       return { 
-        prependContext: `The user has collected the following messages via multi-message mode. Process them as a single request:\n---\n${bufferContent}---\n\n`
+        prependContext: `The user has collected the following messages via multi-message mode. Process them as a single request:\n---\n${bufferContent}---\n\nIMPORTANT: The user's message is the deactivation command (either "${mmcSlash}" or a voice message transcribed as "${voiceDeactivate}"). This command ended multi-message mode. Ignore it completely and respond ONLY to the buffered messages above. Do NOT generate diagrams or interpret this as any other request.`
       };
     }, { priority: 100 });
   }
