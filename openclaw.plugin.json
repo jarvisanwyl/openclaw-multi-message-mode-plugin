@@ -6,7 +6,7 @@
   },
   "configSchema": {
     "type": "object",
-    "additionalProperties": true,
+    "additionalProperties": false,
     "properties": {
       "slashCommands": {
         "type": "object",
