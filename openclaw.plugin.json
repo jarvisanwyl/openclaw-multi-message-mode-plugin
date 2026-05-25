@@ -6,7 +6,7 @@
   },
   "configSchema": {
     "type": "object",
-    "additionalProperties": false,
+    "additionalProperties": true,
     "properties": {
       "slashCommands": {
         "type": "object",
@@ -23,13 +23,6 @@
         "properties": {
           "activate": { "type": "string", "default": "multi-message mode" },
           "deactivate": { "type": "string", "default": "multi-message complete" }
-        }
-      },
-      "hooks": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "allowConversationAccess": { "type": "boolean", "default": true }
         }
       }
     }
