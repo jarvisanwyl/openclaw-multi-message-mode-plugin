@@ -6,6 +6,21 @@ The **Multi‑Message Mode** plugin buffers multiple incoming messages and relea
 
 The plugin intercepts inbound messages via the OpenClaw `before_agent_reply` hook, stores them in a session‑scoped buffer, and blocks them from reaching the agent. When the batch is complete, the buffer is injected into the LLM prompt via the `before_prompt_build` hook, allowing the agent to process all accumulated messages as a single request.
 
+## Prerequisites
+
+For the plugin's hooks to fire, the plugin entry in `openclaw.json` must include `hooks.allowConversationAccess` set to `true`:
+
+```json
+"multi-message-mode": {
+  "enabled": true,
+  "hooks": {
+    "allowConversationAccess": true
+  }
+}
+```
+
+Without this setting, the `before_agent_reply` and `before_prompt_build` hooks will not receive conversation context and the plugin will not function.
+
 ## Configuration
 
 The plugin's slash commands, voice‑transcript keywords, and echo behaviour can be customized via OpenClaw's plugin configuration system. The default values are those listed in the tables below.
@@ -25,25 +40,27 @@ The plugin's slash commands, voice‑transcript keywords, and echo behaviour can
 
 ### Configuration Example
 
-Add the following to your `openclaw.json` under `"plugins": { "multi‑message‑mode": { ... } }`:
+Add the following to your `openclaw.json`. The plugin entry must include `hooks.allowConversationAccess: true` (see [Prerequisites](#prerequisites)). Configurable parameters live under the `config` key:
 
 ```json
-{
-  "plugins": {
-    "multi‑message‑mode": {
-      "slashCommands": {
-        "activate": "/batch",
-        "deactivate": "/release",
-        "cancel": "/batch-cancel"
-      },
-      "voiceKeywords": {
-        "activate": "start batching",
-        "deactivate": "finish batching",
-        "cancel": "discard batching"
-      },
-      "echoBuffer": false,
-      "echoTruncation": 120
-    }
+"multi-message-mode": {
+  "enabled": true,
+  "hooks": {
+    "allowConversationAccess": true
+  },
+  "config": {
+    "slashCommands": {
+      "activate": "/batch",
+      "deactivate": "/release",
+      "cancel": "/batch-cancel"
+    },
+    "voiceKeywords": {
+      "activate": "start batching",
+      "deactivate": "finish batching",
+      "cancel": "discard batching"
+    },
+    "echoBuffer": false,
+    "echoTruncation": 120
   }
 }
 ```
