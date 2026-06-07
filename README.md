@@ -40,7 +40,7 @@ Place this folder inside your OpenClaw `plugins/` directory and ensure the plugi
 4. The agent receives all buffered messages as a single context block and processes them together
 
 ### Voice activation
-- Send a voice note saying **"activate"** (exact phrase, ≤30 characters) to activate
+- Send a voice note saying **"activate"** to activate
 - Send follow‑up messages (they will be buffered)
 - Send a voice note saying **"deactivate"** to release the batch
 
