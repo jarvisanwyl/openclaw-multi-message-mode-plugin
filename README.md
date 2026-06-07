@@ -34,7 +34,17 @@ Place this folder inside your OpenClaw `plugins/` directory and ensure the plugi
 
 ## Configuration
 
-No configuration schema is currently required. The plugin works out of the box.
+The plugin works out of the box with no configuration, but supports a few optional settings:
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `slashCommands.activate` | string | `/mmm` | Slash command to start batch mode |
+| `slashCommands.deactivate` | string | `/mmc` | Slash command to release the batch |
+| `slashCommands.cancel` | string | `/mmm-cancel` | Slash command to discard the batch |
+| `voiceKeywords.activate` | string | `multi-message mode` | Voice phrase to start batch mode |
+| `voiceKeywords.deactivate` | string | `multi-message complete` | Voice phrase to release the batch |
+| `echoBuffer` | boolean | `true` | When `true`, voice note acknowledgments echo the captured transcript so the user can verify transcription accuracy. Plain text messages are never echoed (the user already sees them). |
+| `echoTruncation` | integer | `200` | Maximum characters shown in the echo before truncating with `...`. Set to `0` for no truncation. Only applies when `echoBuffer` is `true`. |
 
 ## How it works
 

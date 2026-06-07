@@ -24,7 +24,9 @@
           "activate": { "type": "string", "default": "multi-message mode" },
           "deactivate": { "type": "string", "default": "multi-message complete" }
         }
-      }
+      },
+      "echoBuffer": { "type": "boolean", "default": true },
+      "echoTruncation": { "type": "integer", "default": 200 }
     }
   }
 }

@@ -186,7 +186,27 @@ export default definePluginEntry({
 
       return null;
     };
-    
+
+    // Build the acknowledgment text for a buffered message.
+    // If echoBuffer is true and a non-empty transcript is provided, the
+    // transcript is echoed back so the user can verify the transcription.
+    // Plain text messages are never echoed (the user already sees them).
+    // echoTruncation limits the echoed length; 0 means no truncation.
+    const buildAckText = ({ transcript, echoBuffer, echoTruncation }) => {
+      if (!echoBuffer) {
+        return 'Message buffered.';
+      }
+      if (!transcript || !transcript.trim()) {
+        return 'Message buffered.';
+      }
+      const limit = echoTruncation;
+      const text = transcript;
+      if (limit > 0 && text.length > limit) {
+        return `Message buffered: "${text.slice(0, limit)}..."`;
+      }
+      return `Message buffered: "${text}"`;
+    };
+
     api.logger.info('[multi-message-mode] Plugin registering');
     
     // Append message to buffer with error logging
@@ -279,17 +299,23 @@ export default definePluginEntry({
       }
       
       // Batch is active - buffer transcript and cancel agent turn
+      const echoBuffer = api.pluginConfig?.echoBuffer ?? true;
+      const rawEchoTruncation = api.pluginConfig?.echoTruncation;
+      // Default to 200. 0 or negative means no truncation.
+      const echoTruncation = rawEchoTruncation === undefined ? 200 : (rawEchoTruncation > 0 ? rawEchoTruncation : 0);
+      let transcript = null;
       if (messageText) {
         let content = messageText;
         // If it's a voice message, extract just the transcript
-        const transcript = extractTranscript(cleanedBody);
+        transcript = extractTranscript(cleanedBody);
         if (transcript !== null) {
           content = transcript;
         }
         await appendToBuffer(identifier, content);
       }
-      
-      return { handled: true, reply: { text: 'Message buffered.' } }; // Cancel agent turn and reply.
+
+      const ackText = buildAckText({ transcript, echoBuffer, echoTruncation });
+      return { handled: true, reply: { text: ackText } }; // Cancel agent turn and reply.
     }, { priority: 100 });
     
     // ========================================
