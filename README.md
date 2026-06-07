@@ -5,12 +5,27 @@ This plugin buffers multiple incoming messages and releases them as a single con
 ## Features
 
 - **Slash‑command activation**: `/mma` to start, `/mmd` to release, `/mmc` to discard
-- **Voice‑activation**: Say "activate" or "deactivate" in a voice note (short phrases only)
+- **Voice‑activation**: Say "activate", "deactivate", or "cancel" in a voice note (short phrases only)
 - **Session‑scoped buffers**: Each conversation gets its own isolated buffer
 - **Automatic blocking**: While active, messages are stored and the agent turn is cancelled
 - **Injection via prependContext**: When released, the buffer is injected into the LLM prompt as a single request
 - **Ordering guaranteed**: Messages are buffered in send order (sequential processing)
 - **Clean‑up**: Buffer files are deleted after injection; no persistent state
+
+## Prerequisites
+
+For the plugin's hooks to fire, the plugin entry in `openclaw.json` must include `hooks.allowConversationAccess` set to `true`:
+
+```json
+"multi-message-mode": {
+  "enabled": true,
+  "hooks": {
+    "allowConversationAccess": true
+  }
+}
+```
+
+Without this setting, the `before_agent_reply` hook will not receive conversation context, meaning messages cannot be intercepted and buffered. The plugin will not function.
 
 ## Installation
 
@@ -20,7 +35,7 @@ Place this folder inside your OpenClaw `plugins/` directory and ensure the plugi
 
 ### Slash commands
 1. Activate batch mode: send `/mma`
-2. Send any number of messages (text or voice). Each will be acknowledged with "Message buffered."
+2. Send any number of messages (text or voice). Voice note acknowledgments will include the transcript for confirmation (see `echoBuffer` config). Plain text acknowledgments show "Message buffered."
 3. Release batch: send `/mmd`
 4. The agent receives all buffered messages as a single context block and processes them together
 
