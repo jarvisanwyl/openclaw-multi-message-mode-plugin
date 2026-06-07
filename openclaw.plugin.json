@@ -12,17 +12,18 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "activate": { "type": "string", "default": "/mmm" },
-          "deactivate": { "type": "string", "default": "/mmc" },
-          "cancel": { "type": "string", "default": "/mmm-cancel" }
+          "activate": { "type": "string", "default": "/mma" },
+          "deactivate": { "type": "string", "default": "/mmd" },
+          "cancel": { "type": "string", "default": "/mmc" }
         }
       },
       "voiceKeywords": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "activate": { "type": "string", "default": "multi-message mode" },
-          "deactivate": { "type": "string", "default": "multi-message complete" }
+          "activate": { "type": "string", "default": "activate" },
+          "deactivate": { "type": "string", "default": "deactivate" },
+          "cancel": { "type": "string", "default": "cancel" }
         }
       },
       "echoBuffer": { "type": "boolean", "default": true },

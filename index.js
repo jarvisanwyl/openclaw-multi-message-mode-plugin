@@ -122,8 +122,8 @@ export default definePluginEntry({
     const isActivationRequest = (cleanedBody, cfg = {}) => {
       const slashCommands = cfg?.slashCommands ?? {};
       const voiceKeywords = cfg?.voiceKeywords ?? {};
-      const mmmSlash = slashCommands.activate ?? '/mmm';
-      const voiceActivate = voiceKeywords.activate ?? 'multi-message mode';
+      const mmmSlash = slashCommands.activate ?? '/mma';
+      const voiceActivate = voiceKeywords.activate ?? 'activate';
       const trimmed = cleanedBody.trim();
       if (trimmed === mmmSlash) {
         return true;
@@ -141,8 +141,8 @@ export default definePluginEntry({
     const isDeactivationRequest = (cleanedBody, cfg = {}) => {
       const slashCommands = cfg?.slashCommands ?? {};
       const voiceKeywords = cfg?.voiceKeywords ?? {};
-      const mmcSlash = slashCommands.deactivate ?? '/mmc';
-      const voiceDeactivate = voiceKeywords.deactivate ?? 'multi-message complete';
+      const mmcSlash = slashCommands.deactivate ?? '/mmd';
+      const voiceDeactivate = voiceKeywords.deactivate ?? 'deactivate';
       const trimmed = cleanedBody.trim();
       if (trimmed === mmcSlash) {
         return true;
@@ -160,8 +160,8 @@ export default definePluginEntry({
     const isCancelRequest = (cleanedBody, cfg = {}) => {
       const slashCommands = cfg?.slashCommands ?? {};
       const voiceKeywords = cfg?.voiceKeywords ?? {};
-      const mmmCancelSlash = slashCommands.cancel ?? '/mmm-cancel';
-      const voiceCancel = voiceKeywords.cancel ?? 'multi-message cancel';
+      const mmmCancelSlash = slashCommands.cancel ?? '/mmc';
+      const voiceCancel = voiceKeywords.cancel ?? 'cancel';
       const trimmed = cleanedBody.trim();
       if (trimmed === mmmCancelSlash) {
         return true;
@@ -243,11 +243,11 @@ export default definePluginEntry({
       api.logger.info(`[multi-message-mode] ctx.sessionKey: ${ctx?.sessionKey}`);
       const identifier = getIdentifier(ctx);
       const slashCommands = api.pluginConfig?.slashCommands ?? {};
-      const mmmSlash = slashCommands.activate ?? '/mmm';
+      const mmmSlash = slashCommands.activate ?? '/mma';
       const voiceKeywords = api.pluginConfig?.voiceKeywords ?? {};
-      const mmcSlash = slashCommands.deactivate ?? '/mmc';
-      const voiceDeactivate = voiceKeywords.deactivate ?? 'multi-message complete';
-      const mmmCancelSlash = slashCommands.cancel ?? '/mmm-cancel';
+      const mmcSlash = slashCommands.deactivate ?? '/mmd';
+      const voiceDeactivate = voiceKeywords.deactivate ?? 'deactivate';
+      const mmmCancelSlash = slashCommands.cancel ?? '/mmc';
       
       if (!identifier) {
         return undefined;
@@ -326,8 +326,8 @@ export default definePluginEntry({
       const promptText = event.prompt || '';
       const slashCommands = api.pluginConfig?.slashCommands ?? {};
       const voiceKeywords = api.pluginConfig?.voiceKeywords ?? {};
-      const mmcSlash = slashCommands.deactivate ?? '/mmc';
-      const voiceDeactivate = voiceKeywords.deactivate ?? 'multi-message complete';
+      const mmcSlash = slashCommands.deactivate ?? '/mmd';
+      const voiceDeactivate = voiceKeywords.deactivate ?? 'deactivate';
 
       const isDeactivation = promptText.includes(mmcSlash) || isDeactivationRequest(promptText, api.pluginConfig);
       

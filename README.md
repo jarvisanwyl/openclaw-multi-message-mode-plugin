@@ -4,8 +4,8 @@ This plugin buffers multiple incoming messages and releases them as a single con
 
 ## Features
 
-- **Slash‑command activation**: `/mmm` to start, `/mmc` to release, `/mmm‑cancel` to discard
-- **Voice‑activation**: Say "multi‑message mode" or "multi‑message complete" in a voice note (short phrases only)
+- **Slash‑command activation**: `/mma` to start, `/mmd` to release, `/mmc` to discard
+- **Voice‑activation**: Say "activate" or "deactivate" in a voice note (short phrases only)
 - **Session‑scoped buffers**: Each conversation gets its own isolated buffer
 - **Automatic blocking**: While active, messages are stored and the agent turn is cancelled
 - **Injection via prependContext**: When released, the buffer is injected into the LLM prompt as a single request
@@ -19,18 +19,19 @@ Place this folder inside your OpenClaw `plugins/` directory and ensure the plugi
 ## Usage
 
 ### Slash commands
-1. Activate batch mode: send `/mmm`
+1. Activate batch mode: send `/mma`
 2. Send any number of messages (text or voice). Each will be acknowledged with "Message buffered."
-3. Release batch: send `/mmc`
+3. Release batch: send `/mmd`
 4. The agent receives all buffered messages as a single context block and processes them together
 
 ### Voice activation
-- Send a voice note saying **"multi‑message mode"** (exact phrase, ≤30 characters) to activate
+- Send a voice note saying **"activate"** (exact phrase, ≤30 characters) to activate
 - Send follow‑up messages (they will be buffered)
-- Send a voice note saying **"multi‑message complete"** to release the batch
+- Send a voice note saying **"deactivate"** to release the batch
 
 ### Cancellation
-- Send `/mmm‑cancel` at any time to discard the buffer and deactivate batch mode
+- Send `/mmc` at any time to discard the buffer and deactivate batch mode
+- Or say **"cancel"** in a voice note
 
 ## Configuration
 
@@ -38,11 +39,12 @@ The plugin works out of the box with no configuration, but supports a few option
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `slashCommands.activate` | string | `/mmm` | Slash command to start batch mode |
-| `slashCommands.deactivate` | string | `/mmc` | Slash command to release the batch |
-| `slashCommands.cancel` | string | `/mmm-cancel` | Slash command to discard the batch |
-| `voiceKeywords.activate` | string | `multi-message mode` | Voice phrase to start batch mode |
-| `voiceKeywords.deactivate` | string | `multi-message complete` | Voice phrase to release the batch |
+| `slashCommands.activate` | string | `/mma` | Slash command to start batch mode |
+| `slashCommands.deactivate` | string | `/mmd` | Slash command to release the batch |
+| `slashCommands.cancel` | string | `/mmc` | Slash command to discard the batch |
+| `voiceKeywords.activate` | string | `activate` | Voice phrase to start batch mode |
+| `voiceKeywords.deactivate` | string | `deactivate` | Voice phrase to release the batch |
+| `voiceKeywords.cancel` | string | `cancel` | Voice phrase to discard the batch |
 | `echoBuffer` | boolean | `true` | When `true`, voice note acknowledgments echo the captured transcript so the user can verify transcription accuracy. Plain text messages are never echoed (the user already sees them). |
 | `echoTruncation` | integer | `200` | Maximum characters shown in the echo before truncating with `...`. Set to `0` for no truncation. Only applies when `echoBuffer` is `true`. |
 

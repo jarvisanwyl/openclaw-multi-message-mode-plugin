@@ -14,12 +14,12 @@ The plugin's slash commands, voice‑transcript keywords, and echo behaviour can
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `slashCommands.activate` | string | `/mmm` | Slash command to activate multi‑message mode |
-| `slashCommands.deactivate` | string | `/mmc` | Slash command to deactivate multi‑message mode |
-| `slashCommands.cancel` | string | `/mmm‑cancel` | Slash command to cancel batch and discard buffer |
-| `voiceKeywords.activate` | string | `multi‑message mode` | Spoken phrase (transcript) that activates batch mode |
-| `voiceKeywords.deactivate` | string | `multi‑message complete` | Spoken phrase that deactivates batch mode |
-| `voiceKeywords.cancel` | string | `multi‑message cancel` | Spoken phrase that cancels the batch |
+| `slashCommands.activate` | string | `/mma` | Slash command to activate multi‑message mode |
+| `slashCommands.deactivate` | string | `/mmd` | Slash command to deactivate multi‑message mode |
+| `slashCommands.cancel` | string | `/mmc` | Slash command to cancel batch and discard buffer |
+| `voiceKeywords.activate` | string | `activate` | Spoken phrase (transcript) that activates batch mode |
+| `voiceKeywords.deactivate` | string | `deactivate` | Spoken phrase that deactivates batch mode |
+| `voiceKeywords.cancel` | string | `cancel` | Spoken phrase that cancels the batch |
 | `echoBuffer` | boolean | `true` | When `true`, voice note acknowledgments echo the captured transcript so the user can verify transcription accuracy. Plain text messages are never echoed. |
 | `echoTruncation` | integer | `200` | Maximum characters shown in the echo before truncating with `...`. Set to `0` for no truncation. Only applies when `echoBuffer` is `true`. |
 
@@ -55,9 +55,9 @@ The plugin receives its configuration via `api.pluginConfig` in hook handlers. F
 ```javascript
 const slashCommands = api.pluginConfig?.slashCommands ?? {};
 const voiceKeywords = api.pluginConfig?.voiceKeywords ?? {};
-const mmmSlash = slashCommands.activate ?? '/mmm';
-const voiceActivate = voiceKeywords.activate ?? 'multi-message mode';
-const voiceDeactivate = voiceKeywords.deactivate ?? 'multi-message complete';
+const mmmSlash = slashCommands.activate ?? '/mma';
+const voiceActivate = voiceKeywords.activate ?? 'activate';
+const voiceDeactivate = voiceKeywords.deactivate ?? 'deactivate';
 const echoBuffer = api.pluginConfig?.echoBuffer ?? true;
 const rawEchoTruncation = api.pluginConfig?.echoTruncation;
 const echoTruncation = rawEchoTruncation === undefined ? 200 : (rawEchoTruncation > 0 ? rawEchoTruncation : 0);
@@ -71,9 +71,9 @@ Configuration is optional; missing keys fall back to defaults.
 
 | Command | Meaning | Action |
 |---------|---------|--------|
-| `/mmm`  | Multi‑Message Mode | Activate batch mode |
-| `/mmc`  | Multi‑Message Complete | Deactivate batch mode |
-| `/mmm‑cancel` | Cancel batch | Discard buffer and deactivate |
+| `/mma`  | Multi‑Message Activate | Activate batch mode |
+| `/mmd`  | Multi‑Message Deactivate | Deactivate batch mode |
+| `/mmc`  | Multi‑Message Cancel | Discard buffer and deactivate |
 
 *These are the default commands; they can be configured via plugin settings.*
 
@@ -81,9 +81,9 @@ Configuration is optional; missing keys fall back to defaults.
 
 | Spoken phrase | Meaning | Detection logic |
 |---------------|---------|-----------------|
-| `multi‑message mode`   | Activate batch mode | See "Voice detection" below |
-| `multi‑message complete` | Deactivate batch mode | See "Voice detection" below |
-| `multi‑message cancel` | Cancel batch | See "Voice detection" below |
+| `activate`   | Activate batch mode | See "Voice detection" below |
+| `deactivate` | Deactivate batch mode | See "Voice detection" below |
+| `cancel` | Cancel batch | See "Voice detection" below |
 
 *These are the default phrases; they can be configured via plugin settings.*
 
@@ -94,7 +94,7 @@ When a voice message arrives, its transcript is embedded in the `cleanedBody` fi
 **Format A — New Telegram DM format:**
 
 ```
-[Audio transcript (machine-generated, untrusted)]: "Multi-message mode."
+[Audio transcript (machine-generated, untrusted)]: "activate"
 ```
 
 The transcript is captured by matching the `[Audio transcript (machine-generated, untrusted)]:` marker and extracting the quoted string.
@@ -106,12 +106,12 @@ The transcript is captured by matching the `[Audio transcript (machine-generated
 User text:
 <untrusted body>
 Transcript:
-Multi-message mode
+activate
 ```
 
 The transcript is captured by matching the `Transcript:` line, taking everything up to the next `\n---` separator (or end of input).
 
-*Note:* The phrases `Multi‑message mode`, `Multi‑message complete`, and `Multi‑message cancel` are the **default** activation/deactivation/cancel keywords; they can be customized via the plugin's `voiceKeywords` configuration (see [Configuration](#configuration)).
+*Note:* The phrases `activate`, `deactivate`, and `cancel` are the **default** activation/deactivation/cancel keywords; they can be customized via the plugin's `voiceKeywords` configuration (see [Configuration](#configuration)).
 
 Detection steps (applied to the extracted transcript, regardless of source format):
 1. **Extract transcript**: try Format A first, then Format B; if neither matches, no transcript is available and the message is treated as normal content.
@@ -120,29 +120,30 @@ Detection steps (applied to the extracted transcript, regardless of source forma
    - Convert the transcript to lowercase.
    - Remove all non‑letter characters (a‑z).
 4. **Exact match**:
-   - If the normalized string equals `multimessagemode` → **activation**.
-   - If the normalized string equals `multimessagecomplete` → **deactivation**.
-   - If the normalized string equals `multimessagecancel` → **cancellation**.
+   - If the normalized string equals `activate` → **activation**.
+   - If the normalized string equals `deactivate` → **deactivation**.
+   - If the normalized string equals `cancel` → **cancellation**.
    - Otherwise, treat as normal content.
 
    *These are the default normalized keywords; they correspond to the configured `voiceKeywords.activate`, `voiceKeywords.deactivate`, and `voiceKeywords.cancel` settings.*
 
 **Examples**:
-- `"Multi‑message mode!"` → `multimessagemode` → activate
-- `"Multi‑message complete."` → `multimessagecomplete` → deactivate
-- `"Multi‑message cancel."` → `multimessagecancel` → cancel
-- `"Okay, let's start a long multi‑message mode session right now"` → transcript length > 30 → ignore (treated as buffered content)
-- `"Let's start multi-message mode now"` → 32 chars, length > 30 → ignore (treated as buffered content)
+- `"activate"` → `activate` (7 chars) → activate
+- `"Activate!"` → `activate` → activate
+- `"deactivate."` → `deactivate` → deactivate
+- `"Cancel"` → `cancel` → cancel
+- `"Okay, please go ahead and activate the long‑awaited feature now"` → 56 chars, length > 30 → ignore (treated as buffered content)
+- `"I want to cancel my order please"` → 32 chars, length > 30 → ignore (treated as buffered content)
 
 ## Behavior
 
-### Activation (`/mmm` or voice `multi‑message mode`)
+### Activation (`/mma` or voice `activate`)
 
 *These are the default triggers; both slash command and voice keyword can be customized via plugin configuration.*
 1. Create a batch‑state directory for the session (`/tmp/openclaw/multi‑message‑mode/batch/<normalized‑session‑id>/`).
 2. Write an `active` flag file.
 3. Create empty `buffer.txt` and `meta.json` files.
-4. Reply with a short confirmation using the configured `slashCommands.deactivate` and `voiceKeywords.deactivate` values. With defaults, the message reads: `Multi‑message mode activated. Send messages, then type /mmc or say "multi-message complete" to release.`
+4. Reply with a short confirmation using the configured `slashCommands.deactivate` and `voiceKeywords.deactivate` values. With defaults, the message reads: `Multi‑message mode activated. Send messages, then type /mmd or say "deactivate" to release.`
 5. **All subsequent messages are blocked** (see "Buffering" and "Message Acknowledgments").
 
 ### Buffering (while active)
@@ -164,7 +165,7 @@ When a message is buffered, the plugin returns `{ handled: true, reply: { text: 
 
 The defensive handling: if `echoTruncation` is negative, treat as `0` (no truncation). Missing config falls back to the schema defaults (`echoBuffer: true`, `echoTruncation: 200`).
 
-### Deactivation (`/mmc` or voice `multi‑message complete`)
+### Deactivation (`/mmd` or voice `deactivate`)
 
 *These are the default triggers; both slash command and voice keyword can be customized via plugin configuration.*
 1. Remove the `active` flag file (keep the buffer on disk).
@@ -174,7 +175,7 @@ The defensive handling: if `echoTruncation` is negative, treat as `0` (no trunca
 
 If the batch is released with an empty buffer (no messages were buffered), `before_prompt_build` injects a placeholder `The user released a multi-message batch, but no messages were buffered.` instead of an empty buffer block.
 
-### Cancellation (`/mmm‑cancel` or voice `multi‑message cancel`)
+### Cancellation (`/mmc` or voice `cancel`)
 
 *This is the default slash command and voice phrase; both can be customized via plugin configuration.*
 1. Delete the entire batch directory, discarding any buffered content.
@@ -195,13 +196,13 @@ If the batch is released with an empty buffer (no messages were buffered), `befo
 ## Plugin Hooks
 
 - **`before_agent_reply`** (priority 100): Handles activation, cancellation, buffering, and deactivation detection. Blocks agent turns while batch is active and returns the acknowledgment reply.
-- **`before_prompt_build`** (priority 100): Detects deactivation messages (`/mmc` or voice), reads the buffer, cleans up the directory, and injects the buffer via `prependContext`.
+- **`before_prompt_build`** (priority 100): Detects deactivation messages (`/mmd` or voice), reads the buffer, cleans up the directory, and injects the buffer via `prependContext`.
 
 ## Edge Cases & Error Handling
 
 - **Plugin restart**: Batch state survives because it's stored on disk.
 - **Multiple sessions**: Each chat gets its own isolated buffer.
-- **Concurrent activation**: If already active, `/mmm` replies "Multi‑message mode already active."
+- **Concurrent activation**: If already active, `/mma` replies "Multi‑message mode already active."
 - **Deactivation without activation**: Ignored in `before_agent_reply` (no `active` flag to remove); `before_prompt_build` is a no‑op if there is no buffered content.
 - **Buffer read/write failures**: Warnings are logged via `api.logger.warn`; the plugin continues without crashing. Failed buffer appends do not update metadata.
 - **Ordering guarantee**: Messages are buffered in the order they trigger the `before_agent_reply` hook. With queue depth 0 (`collect` mode), this matches send order.
