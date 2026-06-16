@@ -19,7 +19,7 @@ For the plugin's hooks to fire, the plugin entry in `openclaw.json` must include
 }
 ```
 
-Without this setting, the `before_agent_reply` and `before_prompt_build` hooks will not receive conversation context and the plugin will not function.
+Without this setting, the `before_agent_reply` hook will not receive conversation context, meaning messages cannot be intercepted and buffered. The plugin will not function.
 
 ## Configuration
 
@@ -35,7 +35,7 @@ The plugin's slash commands, voice‑transcript keywords, and echo behaviour can
 | `voiceKeywords.activate` | string | `activate` | Spoken phrase (transcript) that activates batch mode |
 | `voiceKeywords.deactivate` | string | `deactivate` | Spoken phrase that deactivates batch mode |
 | `voiceKeywords.cancel` | string | `cancel` | Spoken phrase that cancels the batch |
-| `echoBuffer` | boolean | `true` | When `true`, voice note acknowledgments echo the captured transcript so the user can verify transcription accuracy. Plain text messages are never echoed. |
+| `echoBuffer` | boolean | `false` | When `true`, voice note acknowledgments echo the captured transcript so the user can verify transcription accuracy. Plain text messages are never echoed. |
 | `echoTruncation` | integer | `200` | Maximum characters shown in the echo before truncating with `...`. Set to `0` for no truncation. Only applies when `echoBuffer` is `true`. |
 
 ### Configuration Example
@@ -180,7 +180,7 @@ When a message is buffered, the plugin returns `{ handled: true, reply: { text: 
 - **`echoBuffer: true`, transcript available, but no truncation desired** → set `echoTruncation: 0` to disable truncation entirely.
 - **Plain text messages** are never echoed regardless of `echoBuffer`; the user already sees what they typed.
 
-The defensive handling: if `echoTruncation` is negative, treat as `0` (no truncation). Missing config falls back to the schema defaults (`echoBuffer: true`, `echoTruncation: 200`).
+The defensive handling: if `echoTruncation` is negative, treat as `0` (no truncation). Missing config falls back to the schema defaults (`echoBuffer: false`, `echoTruncation: 200`).
 
 ### Deactivation (`/mmd` or voice `deactivate`)
 

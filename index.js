@@ -299,7 +299,7 @@ export default definePluginEntry({
       }
       
       // Batch is active - buffer transcript and cancel agent turn
-      const echoBuffer = api.pluginConfig?.echoBuffer ?? true;
+      const echoBuffer = api.pluginConfig?.echoBuffer ?? false;
       const rawEchoTruncation = api.pluginConfig?.echoTruncation;
       // Default to 200. 0 or negative means no truncation.
       const echoTruncation = rawEchoTruncation === undefined ? 200 : (rawEchoTruncation > 0 ? rawEchoTruncation : 0);
