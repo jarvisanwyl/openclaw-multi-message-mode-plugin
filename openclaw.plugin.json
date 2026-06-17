@@ -26,7 +26,7 @@
           "cancel": { "type": "string", "default": "cancel" }
         }
       },
-      "echoBuffer": { "type": "boolean", "default": true },
+      "echoBuffer": { "type": "boolean", "default": false },
       "echoTruncation": { "type": "integer", "default": 200 }
     }
   }
