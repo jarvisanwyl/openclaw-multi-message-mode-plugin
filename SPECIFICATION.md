@@ -37,6 +37,8 @@ The plugin's slash commands, voice‑transcript keywords, and echo behaviour can
 | `voiceKeywords.cancel` | string | `cancel` | Spoken phrase that cancels the batch |
 | `echoBuffer` | boolean | `false` | When `true`, voice note acknowledgments echo the captured transcript so the user can verify transcription accuracy. Plain text messages are never echoed. |
 | `echoTruncation` | integer | `200` | Maximum characters shown in the echo before truncating with `...`. Set to `0` for no truncation. Only applies when `echoBuffer` is `true`. |
+| `bufferedMessagesHeader` | string | `User messages sent via multi-message mode:` | Heading rendered above the list of buffered messages in the transcript block. Set to `""` to suppress the heading. See [Transcript Preservation](#transcript-preservation). |
+| `assistantReplyHeader` | string | `Assistant reply:` | Heading rendered above the assistant's reply in the transcript block. Set to `""` to suppress the heading. See [Transcript Preservation](#transcript-preservation). |
 
 ### Configuration Example
 
@@ -60,7 +62,9 @@ Add the following to your `openclaw.json`. The plugin entry must include `hooks.
       "cancel": "discard batching"
     },
     "echoBuffer": false,
-    "echoTruncation": 120
+    "echoTruncation": 120,
+    "bufferedMessagesHeader": "User messages sent via multi-message mode:",
+    "assistantReplyHeader": "Assistant reply:"
   }
 }
 ```
@@ -187,10 +191,11 @@ The defensive handling: if `echoTruncation` is negative, treat as `0` (no trunca
 *These are the default triggers; both slash command and voice keyword can be customized via plugin configuration.*
 1. Remove the `active` flag file (keep the buffer on disk).
 2. **Let the deactivation message pass through** to `before_prompt_build`.
-3. In `before_prompt_build`, read `buffer.txt`, delete the entire batch directory, and inject the buffer content into the LLM prompt via `prependContext`.
+3. In `before_prompt_build`, read `buffer.txt`, **persist a one‑shot copy** to `consumed/<session-id>/buffer.txt`, delete the active batch directory, and inject the buffer content into the LLM prompt via `prependContext`.
 4. The agent receives a single prefixed context block containing all buffered messages in chronological order, prefixed with an instruction to ignore the deactivation command itself.
+5. The persisted copy in `consumed/` is consumed by the `message_sending` hook on the deactivation reply — see [Transcript Preservation](#transcript-preservation).
 
-If the batch is released with an empty buffer (no messages were buffered), `before_prompt_build` injects a placeholder `The user released a multi-message batch, but no messages were buffered.` instead of an empty buffer block.
+If the batch is released with an empty buffer (no messages were buffered), `before_prompt_build` injects a placeholder `The user released a multi-message batch, but no messages were buffered.` instead of an empty buffer block, and no copy is persisted.
 
 ### Cancellation (`/mmc` or voice `cancel`)
 
@@ -199,21 +204,55 @@ If the batch is released with an empty buffer (no messages were buffered), `befo
 2. Reply with "Multi‑message mode cancelled."
 3. Cancelling a non‑active batch replies "No active multi‑message batch."
 
+### Transcript Preservation
+
+Buffered messages that reach the LLM via `prependContext` are *ephemeral*: they are visible to the agent during the deactivation turn but are **not** written into the session transcript by the LLM runtime. Without preservation, the buffered content disappears as soon as the turn ends — it cannot be searched or retrieved later.
+
+To make buffered messages part of the durable transcript history, the plugin runs an additional pipeline on the deactivation reply:
+
+1. On deactivation in `before_prompt_build`, the buffer is **persisted** to `consumed/<normalized-session-id>/buffer.txt` before the active batch directory is deleted.
+2. A new `message_sending` hook (priority 100) reads that consumed copy, formats the buffered entries into a transcript block, and returns it as a content patch on the outbound reply — using the SDK `return { content: ... }` contract that `runModifyingHook` consumes (in‑place mutation of `event.content` is ignored).
+3. The merged content reaches both delivery (Telegram) **and** the session transcript store, making the buffered messages searchable in history.
+
+**Transcript block shape** (defaults shown):
+
+```
+**User messages sent via multi-message mode:**
+
+- "first buffered message"
+- "second buffered message"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Assistant reply:**
+[original assistant reply]
+```
+
+The two heading strings are configurable via `bufferedMessagesHeader` and `assistantReplyHeader` (both default to the strings above). Setting either to an empty string suppresses the corresponding heading; the messages and the reply still appear, just without a label.
+
+The consumed directory is one‑shot: it is deleted inside `message_sending` once the patch is returned. If the hook fails to fire or the gateway crashes between `before_prompt_build` and `message_sending`, the consumed directory survives on disk as a recoverable artifact (a stale‑cleanup sweep could be added in a future version).
+
+This feature applies to **deactivation only**. Cancellation (`/mmc`) deletes everything immediately; nothing is preserved, mirroring the explicit user intent to discard.
+
 ## State & Persistence
 
-- **Location**: `/tmp/openclaw/multi‑message‑mode/batch/<normalized‑session‑id>/`
-- **Files**:
+- **Active batch location**: `/tmp/openclaw/multi‑message‑mode/batch/<normalized‑session‑id>/`
+- **Consumed (one‑shot) location**: `/tmp/openclaw/multi‑message‑mode/consumed/<normalized‑session‑id>/` — see [Transcript Preservation](#transcript-preservation).
+- **Files** (under `batch/<id>/`):
   - `active` – empty flag file (exists → batch is active)
   - `buffer.txt` – concatenated messages with timestamps and separators (`[<timestamp>] message\n---\n`)
   - `meta.json` – activation time, identifier, message count, last‑appended timestamp
+- **Files** (under `consumed/<id>/`):
+  - `buffer.txt` – copy of the buffer at deactivation time, consumed by `message_sending` and then deleted
 - **Session identification**: Extracted from `sessionKey` using regex; format `channelId:conversationId` (e.g., `telegram:-1003690577722:topic:1867`).
-- **Clean‑up**: Batch directories are deleted after injection (on deactivation) or on cancellation. No persistent state remains.
+- **Clean‑up**: Batch directories are deleted on deactivation (after persist copy) or on cancellation. Consumed directories are one‑shot and deleted by `message_sending` after the patch is returned. No permanent state remains under normal flow.
 - **Identifier normalization**: Non‑alphanumeric characters (besides `_`, `.`, `-`) in the session identifier are replaced with `_` for use as a directory name.
 
 ## Plugin Hooks
 
 - **`before_agent_reply`** (priority 100): Handles activation, cancellation, buffering, and deactivation detection. Blocks agent turns while batch is active and returns the acknowledgment reply.
-- **`before_prompt_build`** (priority 100): Detects deactivation messages (`/mmd` or voice), reads the buffer, cleans up the directory, and injects the buffer via `prependContext`.
+- **`before_prompt_build`** (priority 100): Detects deactivation messages (`/mmd` or voice), reads the buffer, **persists a copy** to `consumed/<id>/buffer.txt`, deletes the active directory, and injects the buffer via `prependContext`.
+- **`message_sending`** (priority 100): Reads `consumed/<id>/buffer.txt` if present, formats it as a transcript block, returns it as a `{ content: ... }` patch on the outbound reply, then deletes the consumed directory. No‑op for ordinary replies without a deactivation pending. See [Transcript Preservation](#transcript-preservation).
 
 ## Edge Cases & Error Handling
 
@@ -237,8 +276,9 @@ If the batch is released with an empty buffer (no messages were buffered), `befo
 ✅ Error logging for file‑system failures
 ✅ Voice cancellation (slash command and voice keyword)
 ✅ Echo acknowledgment (`echoBuffer` + `echoTruncation`) with truncation logic
+✅ Transcript preservation: one‑shot consumed buffer + `message_sending` patch on deactivation reply; configurable `bufferedMessagesHeader` / `assistantReplyHeader`
 
 ---
 
-*Last updated: 2026‑06‑07*  
+*Last updated: 2026‑06‑23*  
 *Plugin ID: `multi‑message‑mode`*
