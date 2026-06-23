@@ -27,7 +27,9 @@
         }
       },
       "echoBuffer": { "type": "boolean", "default": false },
-      "echoTruncation": { "type": "integer", "default": 200 }
+      "echoTruncation": { "type": "integer", "default": 200 },
+      "bufferedMessagesHeader": { "type": "string", "default": "User messages sent via multi-message mode:" },
+      "assistantReplyHeader": { "type": "string", "default": "Assistant reply:" }
     }
   }
 }

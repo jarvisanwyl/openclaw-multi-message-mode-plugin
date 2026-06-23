@@ -85,6 +85,83 @@ const cancelBatch = async (identifier) => {
   } catch (err) {}
 };
 
+// ========================================
+// Transcript preservation (Phase 1 verified, Phase 2)
+// ========================================
+//
+// One-shot consumed buffer used by message_sending to prepend
+// buffered messages to the outbound reply so they land in the
+// session transcript. Lives under a separate root from the active
+// batch state, keyed by identifier. Cleared by message_sending
+// after the patch is returned.
+
+const CONSUMED_ROOT = '/tmp/openclaw/multi-message-mode/consumed';
+
+const getConsumedDir = (identifier) => {
+  return join(CONSUMED_ROOT, normalizeIdentifier(identifier));
+};
+
+// Copy buffer.txt to consumed/<id>/buffer.txt so message_sending
+// can prepend it to the outbound reply. Fires once per deactivation.
+const persistConsumedBuffer = async (identifier, content) => {
+  const dir = getConsumedDir(identifier);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(join(dir, 'buffer.txt'), content);
+};
+
+const readConsumedBuffer = async (identifier) => {
+  try {
+    const dir = getConsumedDir(identifier);
+    return await fs.readFile(join(dir, 'buffer.txt'), 'utf8');
+  } catch {
+    return null;
+  }
+};
+
+const deleteConsumedBuffer = async (identifier) => {
+  const dir = getConsumedDir(identifier);
+  try {
+    await fs.rm(dir, { recursive: true, force: true });
+  } catch {}
+};
+
+// Default header labels; overridden by pluginConfig when present.
+const TRANSCRIPT_HEADER_DEFAULTS = {
+  bufferedMessagesHeader: 'User messages sent via multi-message mode:',
+  assistantReplyHeader: 'Assistant reply:',
+};
+
+// Format raw buffer.txt content into a clean transcript block.
+// Buffer entries (from appendToBuffer):
+//   [2026-06-23T15:00:00Z] message text
+//   ---
+//
+// cfg keys:
+//   bufferedMessagesHeader (default above)
+//   assistantReplyHeader   (default above)
+const formatBufferForTranscript = (raw, cfg = {}) => {
+  const messagesHeader =
+    cfg.bufferedMessagesHeader ?? TRANSCRIPT_HEADER_DEFAULTS.bufferedMessagesHeader;
+  const replyHeader =
+    cfg.assistantReplyHeader ?? TRANSCRIPT_HEADER_DEFAULTS.assistantReplyHeader;
+
+  const entries = raw
+    .split('\n---\n')
+    .map((e) => e.trim())
+    .filter(Boolean)
+    .map((e) => e.replace(/^\[[^\]]+\]\s*/, '')); // strip ISO timestamp
+
+  if (entries.length === 0) return '';
+
+  const bullets = entries.map((m) => `- "${m}"`).join('\n');
+  return (
+    `**${messagesHeader}**\n\n` +
+    bullets +
+    '\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
+    `**${replyHeader}**`
+  );
+};
+
 
 
 
@@ -352,6 +429,15 @@ export default definePluginEntry({
         return { prependContext: 'The user released a multi-message batch, but no messages were buffered.' };
       }
 
+      // Persist a copy so message_sending can prepend it to the
+      // outbound reply (Phase 2 transcript preservation). Lives
+      // under a separate root from the active batch state.
+      try {
+        await persistConsumedBuffer(identifier, bufferContent);
+      } catch (err) {
+        api.logger.warn(`[multi-message-mode] Failed to persist consumed buffer for ${identifier}: ${err.message}`);
+      }
+
       // Clean up the batch directory (delete buffer files)
       try {
         await cancelBatch(identifier);
@@ -361,9 +447,38 @@ export default definePluginEntry({
 
       // Inject buffer content via prependContext
       api.logger.info(`[multi-message-mode] Injecting ${bufferContent.length} chars via prependContext`);
-      return { 
+      return {
         prependContext: `The user has collected the following messages via multi-message mode. Process them as a single request:\n---\n${bufferContent}---\n\nIMPORTANT: The user's message is the deactivation command (either "${mmcSlash}" or a voice message transcribed as "${voiceDeactivate}"). This command ended multi-message mode. Ignore it completely and respond ONLY to the buffered messages above. Do NOT generate diagrams or interpret this as any other request.`
       };
+    }, { priority: 100 });
+
+    // ========================================
+    // message_sending hook — transcript preservation (Phase 2)
+    // ========================================
+    // Consumes the one-shot consumed/<id>/buffer.txt created by
+    // before_prompt_build on deactivation and prepends the buffered
+    // messages to the outbound reply so they land in the session
+    // transcript. SDK contract: return { content: patch } (the
+    // hook's return value is consumed by runModifyingHook via
+    // mergeResults { content: lastDefined(acc.content, next.content) }).
+    api.on('message_sending', async (event, ctx) => {
+      const identifier = getIdentifier(ctx);
+      if (!identifier) return undefined;
+
+      const consumedBuffer = await readConsumedBuffer(identifier);
+      if (!consumedBuffer) return undefined; // No deactivation → pass through
+
+      const transcriptBlock = formatBufferForTranscript(
+        consumedBuffer,
+        api.pluginConfig ?? {},
+      );
+      await deleteConsumedBuffer(identifier);
+
+      if (typeof event?.content === 'string' && event.content.length > 0) {
+        return { content: transcriptBlock + '\n\n' + event.content };
+      }
+      // Empty original reply — still surface the buffered messages.
+      return { content: transcriptBlock };
     }, { priority: 100 });
   }
 });
