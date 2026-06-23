@@ -10,7 +10,8 @@ This plugin buffers multiple incoming messages and releases them as a single con
 - **Automatic blocking**: While active, messages are stored and the agent turn is cancelled
 - **Injection via prependContext**: When released, the buffer is injected into the LLM prompt as a single request
 - **Ordering guaranteed**: Messages are buffered in send order (sequential processing)
-- **Clean‑up**: Buffer files are deleted after injection; no persistent state
+- **Transcript preservation**: When the batch is released via `/mmd` (or voice `deactivate`), the buffered messages are prepended to the assistant's reply so they appear in the session transcript
+- **Clean‑up**: Buffer files are deleted after injection; no persistent state remains
 
 ## Prerequisites
 
@@ -60,15 +61,18 @@ The plugin works out of the box with no configuration, but supports a few option
 | `voiceKeywords.activate` | string | `activate` | Voice phrase to start batch mode |
 | `voiceKeywords.deactivate` | string | `deactivate` | Voice phrase to release the batch |
 | `voiceKeywords.cancel` | string | `cancel` | Voice phrase to discard the batch |
-| `echoBuffer` | boolean | `true` | When `true`, voice note acknowledgments echo the captured transcript so the user can verify transcription accuracy. Plain text messages are never echoed (the user already sees them). |
+| `echoBuffer` | boolean | `false` | When `true`, voice note acknowledgments echo the captured transcript so the user can verify transcription accuracy. Plain text messages are never echoed (the user already sees them). |
 | `echoTruncation` | integer | `200` | Maximum characters shown in the echo before truncating with `...`. Set to `0` for no truncation. Only applies when `echoBuffer` is `true`. |
+| `bufferedMessagesHeader` | string | `User messages sent via multi-message mode:` | Heading rendered above the buffered‑messages list in the transcript block. Set to `""` to suppress. |
+| `assistantReplyHeader` | string | `Assistant reply:` | Heading rendered above the assistant's reply in the transcript block. Set to `""` to suppress. |
 
 ## How it works
 
-The plugin hooks into OpenClaw's `before_agent_reply` and `before_prompt_build` hooks:
+The plugin hooks into OpenClaw's `before_agent_reply`, `before_prompt_build`, and `message_sending` hooks:
 - **Activation**: Creates a session‑specific directory under `/tmp/openclaw/multi‑message‑mode/batch/`
 - **Buffering**: Appends each message (with timestamp) to `buffer.txt`
-- **Deactivation**: Reads the buffer, deletes the directory, injects content via `prependContext`
+- **Deactivation**: Reads the buffer, persists a one‑shot copy under `/tmp/openclaw/multi‑message‑mode/consumed/`, deletes the active directory, and injects content via `prependContext`
+- **Transcript preservation**: The `message_sending` hook consumes the one‑shot copy, formats it as a clean transcript block (configurable headers), and returns it as a content patch on the outbound reply so the buffered messages are searchable in session history
 - **Voice detection**: Extracts the transcript from Telegram's audio metadata, normalizes it, matches against keywords
 
 ## Documentation
