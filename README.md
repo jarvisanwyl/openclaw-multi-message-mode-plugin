@@ -28,6 +28,22 @@ For the plugin's hooks to fire, the plugin entry in `openclaw.json` must include
 
 Without this setting, the `before_agent_reply` hook will not receive conversation context, meaning messages cannot be intercepted and buffered. The plugin will not function.
 
+### Required Telegram configuration for transcript preservation
+
+Transcript preservation (prepending buffered messages to the session transcript) requires the Telegram channel adapter to dispatch the OpenClaw `message_sending` hook on auto‑reply agent outbounds. On some OpenClaw builds this hook is silently skipped for the auto‑reply path unless the channel account has streaming mode configured. Add this block to the Telegram account that hosts the plugin (typically `channels.telegram.accounts.default`):
+
+```json
+"streaming": {
+  "mode": "progress",
+  "progress": {
+    "toolProgress": true,
+    "commandText": "raw"
+  }
+}
+```
+
+Without this, **activation, buffering and deactivation will all work**, but the buffered preamble will not appear in the session transcript after `/mmd` — there's no error, just a silent miss. See [SPECIFICATION.md § Required Telegram streaming configuration](./SPECIFICATION.md#required-telegram-streaming-configuration-for-transcript-preservation) for the rationale and edge‑cases.
+
 ## Installation
 
 Place this folder inside your OpenClaw `plugins/` directory and ensure the plugin is enabled in your OpenClaw configuration.

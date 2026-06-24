@@ -21,6 +21,37 @@ For the plugin's hooks to fire, the plugin entry in `openclaw.json` must include
 
 Without this setting, the `before_agent_reply` hook will not receive conversation context, meaning messages cannot be intercepted and buffered. The plugin will not function.
 
+#### Required Telegram streaming configuration (for transcript preservation)
+
+Transcript preservation depends on the OpenClaw `message_sending` hook being dispatched on **all** outbound (auto-reply) paths from the Telegram channel adapter. Without configuring the channel's streaming mode, the SDK's outbound aggregator takes an optimised path on auto-reply agent outbounds that bypasses plugin hooks — so the buffer preamble is silently dropped even though everything else (buffering, `prependContext` injection, agent acknowledgement) works correctly. Per OpenClaw issue [#65535](https://github.com/openclaw/openclaw/issues/65535) the hook is unreliable against streaming-aware outbound paths unless the channel adapter is opted in via the account's `streaming.mode`.
+
+The verified-working configuration, set on the Telegram account that hosts the plugin (typically `channels.telegram.accounts.default`):
+
+```json
+"channels": {
+  "telegram": {
+    "accounts": {
+      "default": {
+        "streaming": {
+          "mode": "progress",
+          "progress": {
+            "toolProgress": true,
+            "commandText": "raw"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Notes:
+
+- The plain `channels.telegram.streaming` block (top-level on the channel, not under an account) is also accepted by some OpenClaw builds, but the per-account form is the documented location and matches the working install's config.
+- The value of `progress.toolProgress` and `progress.commandText` can be tuned; the plugin only requires `streaming.mode: "progress"` to engage the hook pipeline. Other modes may not engage it.
+- This requirement applies **only** to transcript preservation. Activation, buffering, deactivation, cancellation, and `prependContext` injection all work without the streaming block — but if transcript preservation is the goal, this block must be present on every Telegram account that is used with the plugin.
+- If a Telegram channel does not have this configuration, the plugin will load and run but the buffered messages will not appear in the session transcript on deactivation. There is no error: the SDK simply doesn't dispatch `message_sending` on the auto-reply path. Check the install's logs for `[multi-message-mode] message_sending` entries after `/mmd` — if those are absent, the streaming block is missing.
+
 ## Configuration
 
 The plugin's slash commands, voice‑transcript keywords, and echo behaviour can be customized via OpenClaw's plugin configuration system. The default values are those listed in the tables below.
@@ -252,7 +283,7 @@ This feature applies to **deactivation only**. Cancellation (`/mmc`) deletes eve
 
 - **`before_agent_reply`** (priority 100): Handles activation, cancellation, buffering, and deactivation detection. Blocks agent turns while batch is active and returns the acknowledgment reply.
 - **`before_prompt_build`** (priority 100): Detects deactivation messages (`/mmd` or voice), reads the buffer, **persists a copy** to `consumed/<id>/buffer.txt`, deletes the active directory, and injects the buffer via `prependContext`.
-- **`message_sending`** (priority 100): Reads `consumed/<id>/buffer.txt` if present, formats it as a transcript block, returns it as a `{ content: ... }` patch on the outbound reply, then deletes the consumed directory. No‑op for ordinary replies without a deactivation pending. See [Transcript Preservation](#transcript-preservation).
+- **`message_sending`** (priority 100): Reads `consumed/<id>/buffer.txt` if present, formats it as a transcript block, returns it as a `{ content: ... }` patch on the outbound reply, then deletes the consumed directory. No‑op for ordinary replies without a deactivation pending. Requires the Telegram `streaming.mode: "progress"` configuration — see [Required Telegram streaming configuration](#required-telegram-streaming-configuration-for-transcript-preservation). See also [Transcript Preservation](#transcript-preservation).
 
 ## Edge Cases & Error Handling
 
@@ -277,8 +308,9 @@ This feature applies to **deactivation only**. Cancellation (`/mmc`) deletes eve
 ✅ Voice cancellation (slash command and voice keyword)
 ✅ Echo acknowledgment (`echoBuffer` + `echoTruncation`) with truncation logic
 ✅ Transcript preservation: one‑shot consumed buffer + `message_sending` patch on deactivation reply; configurable `bufferedMessagesHeader` / `assistantReplyHeader`
+⚠ Transcript preservation requires the Telegram channel account to be configured with `streaming.mode: "progress"` — see [Required Telegram streaming configuration](#required-telegram-streaming-configuration-for-transcript-preservation). Without it, the SDK does not dispatch `message_sending` on auto-reply outbounds and the buffered messages are silently dropped from the transcript.
 
 ---
 
-*Last updated: 2026‑06‑23*  
+*Last updated: 2026‑06‑24*  
 *Plugin ID: `multi‑message‑mode`*
