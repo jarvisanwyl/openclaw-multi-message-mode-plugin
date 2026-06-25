@@ -316,8 +316,8 @@ export default definePluginEntry({
     // before_agent_reply hook
     // ========================================
     api.on('before_agent_reply', async (event, ctx) => {
-      api.logger.info(`[multi-message-mode] ctx keys: ${ctx ? Object.keys(ctx).join(', ') : 'null'}`);
-      api.logger.info(`[multi-message-mode] ctx.sessionKey: ${ctx?.sessionKey}`);
+      api.logger.debug(`[multi-message-mode] ctx keys: ${ctx ? Object.keys(ctx).join(', ') : 'null'}`);
+      api.logger.debug(`[multi-message-mode] ctx.sessionKey: ${ctx?.sessionKey}`);
       const identifier = getIdentifier(ctx);
       const slashCommands = api.pluginConfig?.slashCommands ?? {};
       const mmmSlash = slashCommands.activate ?? '/mma';
@@ -331,7 +331,7 @@ export default definePluginEntry({
       }
       
       const cleanedBody = event.cleanedBody || '';
-      api.logger.info(`[multi-message-mode] cleanedBody: ${cleanedBody}`);
+      api.logger.debug(`[multi-message-mode] cleanedBody: ${cleanedBody}`);
       const messageText = cleanedBody.trim();
 
       // Activation
