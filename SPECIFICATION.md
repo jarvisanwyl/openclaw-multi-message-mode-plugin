@@ -271,7 +271,7 @@ This feature applies to **deactivation only**. Cancellation (`/mmc`) deletes eve
 - **Consumed (one‑shot) location**: `/tmp/openclaw/multi‑message‑mode/consumed/<normalized‑session‑id>/` — see [Transcript Preservation](#transcript-preservation).
 - **Files** (under `batch/<id>/`):
   - `active` – empty flag file (exists → batch is active)
-  - `buffer.txt` – concatenated messages with timestamps and separators (`[<timestamp>] message\n---\n`)
+  - `buffer.txt` – concatenated messages with timestamps and separators (`[<timestamp>] message\n-|-\n`)
   - `meta.json` – activation time, identifier, message count, last‑appended timestamp
 - **Files** (under `consumed/<id>/`):
   - `buffer.txt` – copy of the buffer at deactivation time, consumed by `message_sending` and then deleted

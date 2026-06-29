@@ -5,6 +5,15 @@ import { transcribeFirstAudio } from 'openclaw/plugin-sdk/media-runtime';
 
 const BATCH_ROOT = '/tmp/openclaw/multi-message-mode/batch';
 
+// Separator inserted between entries in `buffer.txt`.
+// Picked over '\n---\n' because three dashes on their own line is a
+// valid Markdown horizontal rule (renders as a section divider in any
+// Markdown viewer that ever touches the file), and reads as prose
+// rather than as an internal record marker. '\n-|-\n' is not a
+// Markdown construct in any spec and reads at a glance as a separator
+// token. See data/coding/multi-message-mode/separator-upgrade.md.
+const ENTRY_SEPARATOR = '\n-|-\n';
+
 const TRANSCRIPT_PATTERNS = [
   {
     name: "new_telegram_dm",
@@ -146,7 +155,7 @@ const formatBufferForTranscript = (raw, cfg = {}) => {
     cfg.assistantReplyHeader ?? TRANSCRIPT_HEADER_DEFAULTS.assistantReplyHeader;
 
   const entries = raw
-    .split('\n---\n')
+    .split(ENTRY_SEPARATOR)
     .map((e) => e.trim())
     .filter(Boolean)
     .map((e) => e.replace(/^\[[^\]]+\]\s*/, '')); // strip ISO timestamp
@@ -290,7 +299,7 @@ export default definePluginEntry({
     const appendToBuffer = async (identifier, message) => {
       const dir = getBatchDir(identifier);
       const bufferPath = join(dir, 'buffer.txt');
-      const entry = `[${new Date().toISOString()}] ${message}\n---\n`;
+      const entry = `[${new Date().toISOString()}] ${message}${ENTRY_SEPARATOR}`;
       try {
         await fs.appendFile(bufferPath, entry);
       } catch (err) {
