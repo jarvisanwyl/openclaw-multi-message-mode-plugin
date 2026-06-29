@@ -362,6 +362,13 @@ export default definePluginEntry({
       // Each appended entry is `[iso] message${ENTRY_SEPARATOR}`, so the
       // anchor `${ENTRY_SEPARATOR}[` appears exactly once per buffer
       // boundary and points at the start of the most recent entry.
+      // Slice *through the end of the matched separator* — keeping the
+      // previous entry's terminator `\n-|-\n` intact so it still ends
+      // the prior buffer line correctly. Slicing to `lastEntryStart`
+      // alone would chop the `\n` immediately preceding `[`, leaving the
+      // previous entry's terminator malformed. Discovered during live
+      // test on 2026-06-29 — buffer was being concatenated to its
+      // successor without an entry separator.
       const lastEntryStart = raw.lastIndexOf(ENTRY_SEPARATOR + '[');
       if (lastEntryStart === -1) {
         // Only one entry in the buffer with no trailing separator.
@@ -370,7 +377,7 @@ export default definePluginEntry({
         await decrementMeta(identifier);
         return { removed: true };
       }
-      await fs.writeFile(bufferPath, raw.slice(0, lastEntryStart));
+      await fs.writeFile(bufferPath, raw.slice(0, lastEntryStart + ENTRY_SEPARATOR.length));
       await decrementMeta(identifier);
       return { removed: true };
     };
