@@ -61,6 +61,11 @@ Place this folder inside your OpenClaw `plugins/` directory and ensure the plugi
 - Send follow‑up messages (they will be buffered)
 - Send a voice note saying **"deactivate"** to release the batch
 
+### Removing the last buffered message
+- Send `/mmdel` at any time while batch mode is active to remove the **most recent** buffered message. Earlier messages stay buffered; the batch stays active.
+- Or say **"delete last"** (two words) in a voice note. A single‑word `delete` is **not** matched — by design, to avoid collisions with normal speech.
+- If the buffer is empty when you trigger a delete, you'll get **"No messages to delete."** If batch mode isn't active, you'll get **"Multi-message mode is not active."** A successful deletion returns **"Last buffered message removed."**
+
 ### Cancellation
 - Send `/mmc` at any time to discard the buffer and deactivate batch mode
 - Or say **"cancel"** in a voice note
@@ -74,9 +79,11 @@ The plugin works out of the box with no configuration, but supports a few option
 | `slashCommands.activate` | string | `/mma` | Slash command to start batch mode |
 | `slashCommands.deactivate` | string | `/mmd` | Slash command to release the batch |
 | `slashCommands.cancel` | string | `/mmc` | Slash command to discard the batch |
+| `slashCommands.deleteLast` | string | `/mmdel` | Slash command to remove the most recent buffered entry |
 | `voiceKeywords.activate` | string | `activate` | Voice phrase to start batch mode |
 | `voiceKeywords.deactivate` | string | `deactivate` | Voice phrase to release the batch |
 | `voiceKeywords.cancel` | string | `cancel` | Voice phrase to discard the batch |
+| `voiceKeywords.deleteLast` | string | `delete last` | Voice phrase to remove the most recent buffered entry. Two words by design — a single‑word `delete` is too collision‑prone in natural speech. |
 | `echoBuffer` | boolean | `false` | When `true`, voice note acknowledgments echo the captured transcript so the user can verify transcription accuracy. Plain text messages are never echoed (the user already sees them). |
 | `echoTruncation` | integer | `200` | Maximum characters shown in the echo before truncating with `...`. Set to `0` for no truncation. Only applies when `echoBuffer` is `true`. |
 | `bufferedMessagesHeader` | string | `User messages sent via multi-message mode:` | Heading rendered above the buffered‑messages list in the transcript block. Set to `""` to suppress. |

@@ -14,7 +14,8 @@
         "properties": {
           "activate": { "type": "string", "default": "/mma" },
           "deactivate": { "type": "string", "default": "/mmd" },
-          "cancel": { "type": "string", "default": "/mmc" }
+          "cancel": { "type": "string", "default": "/mmc" },
+          "deleteLast": { "type": "string", "default": "/mmdel" }
         }
       },
       "voiceKeywords": {
@@ -23,7 +24,8 @@
         "properties": {
           "activate": { "type": "string", "default": "activate" },
           "deactivate": { "type": "string", "default": "deactivate" },
-          "cancel": { "type": "string", "default": "cancel" }
+          "cancel": { "type": "string", "default": "cancel" },
+          "deleteLast": { "type": "string", "default": "delete last" }
         }
       },
       "echoBuffer": { "type": "boolean", "default": false },

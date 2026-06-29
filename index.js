@@ -261,6 +261,28 @@ export default definePluginEntry({
       return normalized === normalizedKeyword;
     };
     
+    // Check if cleanedBody is a delete-last-buffered-message request.
+    // Voice keyword is two words ('delete last') by default — a single-word
+    // 'delete' would collide too easily with normal speech. See
+    // data/coding/multi-message-mode/delete-last-message-upgrade.md.
+    const isDeleteLastRequest = (cleanedBody, cfg = {}) => {
+      const slashCommands = cfg?.slashCommands ?? {};
+      const voiceKeywords = cfg?.voiceKeywords ?? {};
+      const mmDelSlash = slashCommands.deleteLast ?? '/mmdel';
+      const voiceDeleteLast = voiceKeywords.deleteLast ?? 'delete last';
+      const trimmed = cleanedBody.trim();
+      if (trimmed === mmDelSlash) {
+        return true;
+      }
+      const transcript = extractTranscript(cleanedBody);
+      if (!transcript || transcript.length > 30) {
+        return false;
+      }
+      const normalized = normalizeText(transcript);
+      const normalizedKeyword = normalizeText(voiceDeleteLast);
+      return normalized === normalizedKeyword;
+    };
+    
     // Extract transcript from voice message cleanedBody
     const extractTranscript = (cleanedBody) => {
       for (const pattern of TRANSCRIPT_PATTERNS) {
@@ -321,6 +343,55 @@ export default definePluginEntry({
       }
     };
     
+    // Remove the last entry from the buffer (in-place truncation by the
+    // last separator+bracket boundary). Decrements meta.json:messageCount.
+    // Returns { removed: boolean, reason?: string }. See
+    // data/coding/multi-message-mode/delete-last-message-upgrade.md.
+    const removeLastBufferedMessage = async (identifier) => {
+      const dir = getBatchDir(identifier);
+      const bufferPath = join(dir, 'buffer.txt');
+      let raw;
+      try {
+        raw = await fs.readFile(bufferPath, 'utf8');
+      } catch {
+        return { removed: false, reason: 'no-buffer-file' };
+      }
+      if (raw.length === 0) {
+        return { removed: false, reason: 'empty' };
+      }
+      // Each appended entry is `[iso] message${ENTRY_SEPARATOR}`, so the
+      // anchor `${ENTRY_SEPARATOR}[` appears exactly once per buffer
+      // boundary and points at the start of the most recent entry.
+      const lastEntryStart = raw.lastIndexOf(ENTRY_SEPARATOR + '[');
+      if (lastEntryStart === -1) {
+        // Only one entry in the buffer with no trailing separator.
+        // Defensive fallback: find the lone leading '[' and clear.
+        await fs.writeFile(bufferPath, '');
+        await decrementMeta(identifier);
+        return { removed: true };
+      }
+      await fs.writeFile(bufferPath, raw.slice(0, lastEntryStart));
+      await decrementMeta(identifier);
+      return { removed: true };
+    };
+    
+    // Decrement messageCount in meta.json (floored at 0). Best-effort:
+    // a write failure logs and continues — the buffer state is the
+    // canonical source of truth and a sweep can resync later.
+    const decrementMeta = async (identifier) => {
+      const dir = getBatchDir(identifier);
+      const metaPath = join(dir, 'meta.json');
+      try {
+        const raw = await fs.readFile(metaPath, 'utf8');
+        const meta = JSON.parse(raw);
+        meta.messageCount = Math.max(0, (meta.messageCount ?? 0) - 1);
+        meta.lastRemovedAt = new Date().toISOString();
+        await fs.writeFile(metaPath, JSON.stringify(meta, null, 2));
+      } catch (err) {
+        api.logger.warn(`[multi-message-mode] Failed to decrement meta for ${identifier}: ${err.message}`);
+      }
+    };
+    
     // ========================================
     // before_agent_reply hook
     // ========================================
@@ -354,6 +425,21 @@ export default definePluginEntry({
         return { handled: true, reply: {
           text: `Multi-message mode activated. Send messages, then type ${mmcSlash} or say "${voiceDeactivate}" to release.`
         } };
+      }
+      
+      // Delete-last-buffered-message (must run while batch is active;
+      // matches slash command or the two-word voice keyword 'delete last').
+      if (isDeleteLastRequest(cleanedBody, api.pluginConfig)) {
+        api.logger.info(`[multi-message-mode] Delete-last command for ${identifier}`);
+        const active = await isBatchActive(identifier);
+        if (!active) {
+          return { handled: true, reply: { text: 'Multi-message mode is not active.' } };
+        }
+        const result = await removeLastBufferedMessage(identifier);
+        if (!result.removed) {
+          return { handled: true, reply: { text: 'No messages to delete.' } };
+        }
+        return { handled: true, reply: { text: 'Last buffered message removed.' } };
       }
       
       // Cancel

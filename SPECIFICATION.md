@@ -126,6 +126,7 @@ Configuration is optional; missing keys fall back to defaults.
 | `/mma`  | Multi‑Message Activate | Activate batch mode |
 | `/mmd`  | Multi‑Message Deactivate | Deactivate batch mode |
 | `/mmc`  | Multi‑Message Cancel | Discard buffer and deactivate |
+| `/mmdel` | Multi‑Message Delete Last | Remove the most‑recent buffered message |
 
 *These are the default commands; they can be configured via plugin settings.*
 
@@ -136,6 +137,7 @@ Configuration is optional; missing keys fall back to defaults.
 | `activate`   | Activate batch mode | See "Voice detection" below |
 | `deactivate` | Deactivate batch mode | See "Voice detection" below |
 | `cancel` | Cancel batch | See "Voice detection" below |
+| `delete last` | Delete last buffered message | See "Voice detection" below — two‑word phrase by design to reduce false positives from single‑word `delete` in natural speech |
 
 *These are the default phrases; they can be configured via plugin settings.*
 
@@ -227,6 +229,25 @@ The defensive handling: if `echoTruncation` is negative, treat as `0` (no trunca
 5. The persisted copy in `consumed/` is consumed by the `message_sending` hook on the deactivation reply — see [Transcript Preservation](#transcript-preservation).
 
 If the batch is released with an empty buffer (no messages were buffered), `before_prompt_build` injects a placeholder `The user released a multi-message batch, but no messages were buffered.` instead of an empty buffer block, and no copy is persisted.
+
+### Delete‑Last Buffered Message (`/mmdel` or voice `delete last`)
+
+*These are the default triggers; both slash command and voice keyword can be customized via plugin configuration (`slashCommands.deleteLast`, `voiceKeywords.deleteLast`).*
+
+This is a corrective command useful while composing a multi‑message batch: if a recently buffered message was wrong or off‑topic, it can be removed without deactivating the batch or throwing away earlier entries.
+
+1. Receives the request. If the batch is *not* active, the user gets `Multi-message mode is not active.` and nothing is changed.
+2. If the batch is active but `buffer.txt` is empty (or absent), the user gets `No messages to delete.` — the batch stays active.
+3. Otherwise, the most‑recent entry is removed by truncating `buffer.txt` at the last `\n-|-\n[` boundary (the entry‑separator constant's last occurrence followed by the entry's leading `[timestamp]`). `meta.json:messageCount` is decremented (floored at 0); `lastRemovedAt` is set. Earlier buffered messages are preserved; subsequent messages continue to buffer as normal.
+4. The reply confirming removal is `Last buffered message removed.`.
+
+The deletion command itself is **not** buffered — `before_agent_reply` returns `{ handled: true, ... }` and cancels the agent turn, exactly as activation / cancellation behave.
+
+If `buffer.txt` somehow contains only a single entry with no trailing separator (a defensive case — current `appendToBuffer` always writes a trailing separator), the lone entry is cleared and `messageCount` decremented.
+
+The on‑disk deletion happens against `batch/<id>/buffer.txt`; the deactivation pipeline still copies whatever remains to `consumed/<id>/buffer.txt` when the user eventually sends `/mmd`. So a deletion followed by deactivation produces a transcript block in the assistant's reply that reflects only the post‑deletion message set.
+
+Spec: `data/coding/multi-message-mode/delete-last-message-upgrade.md`.
 
 ### Cancellation (`/mmc` or voice `cancel`)
 
