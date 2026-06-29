@@ -238,7 +238,7 @@ This is a corrective command useful while composing a multi‑message batch: if 
 
 1. Receives the request. If the batch is *not* active, the user gets `Multi-message mode is not active.` and nothing is changed.
 2. If the batch is active but `buffer.txt` is empty (or absent), the user gets `No messages to delete.` — the batch stays active.
-3. Otherwise, the most‑recent entry is removed by truncating `buffer.txt` at the last `\n-|-\n[` boundary (the entry‑separator constant's last occurrence followed by the entry's leading `[timestamp]`). `meta.json:messageCount` is decremented (floored at 0); `lastRemovedAt` is set. Earlier buffered messages are preserved; subsequent messages continue to buffer as normal.
+3. Otherwise, the most‑recent entry is removed by truncating `buffer.txt` **just past** the last `\n-|-\n[` boundary — i.e. dropping the matched separator and the last entry but **keeping the previous entry's terminator intact** so the buffer remains well‑formed for any subsequent appending (this is the slice‑boundary handling verified by commit `9c7346e`; slicing to the bracket alone leaves the survivor malformed). `meta.json:messageCount` is decremented (floored at 0); `lastRemovedAt` is set. Earlier buffered messages are preserved; subsequent messages continue to buffer as normal.
 4. The reply confirming removal is `Last buffered message removed.`.
 
 The deletion command itself is **not** buffered — `before_agent_reply` returns `{ handled: true, ... }` and cancels the agent turn, exactly as activation / cancellation behave.
